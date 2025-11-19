@@ -73,7 +73,8 @@ class _MyAppState extends State<MyApp> {
             brightness: Brightness.dark),
         initialRoute: '/',
         routes: {
-          '/': (context) => Intro(),
+          
+        '/': (context) => _defaultHome,
           '/purchase': (context) => Purchase(),
           '/main': (context) => MainPage(),
           '/moments': (context) => Moments(),

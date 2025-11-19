@@ -30,6 +30,11 @@ enum Gender {
   Other,
 }
 
+enum RegistrationType {
+  Phone,
+  Email,
+}
+
 class _RegisterState extends State<Register> {
   final String pagename = "Account Registration";
 
@@ -49,15 +54,19 @@ class _RegisterState extends State<Register> {
   bool _isLoadingGender = false;
   bool _isLoadingRegister = false;
 
-  final Color _primaryOrange = Color(0xFFFF6B35);
-  final Color _secondaryYellow = Color(0xFFF7931E);
-  final Color _accentGreen = Color(0xFF2D9F3C);
-  final Color _deepBrown = Color(0xFF5C3317);
-  final Color _warmTerracotta = Color(0xFFE07A5F);
-  final Color _richRed = Color(0xFFD62828);
+  final Color _primaryOrange = AppColors.lighter;
+  final Color _secondaryYellow = AppColors.lighter;
+  final Color _accentGreen = AppColors.lighter;
+  final Color _deepBrown = AppColors.lighter;
+  final Color _warmTerracotta = AppColors.lighter;
+  final Color _richRed = AppColors.lighter;
   final Color _earthyBeige = Color(0xFFF4F1DE);
 
+  // Registration type selection
+  RegistrationType _registrationType = RegistrationType.Phone;
+
   final phonecontroller = TextEditingController();
+  final emailcontroller = TextEditingController();
   final firstnamecontroller = TextEditingController();
   final lastnamecontroller = TextEditingController();
   final password = TextEditingController();
@@ -67,30 +76,35 @@ class _RegisterState extends State<Register> {
 
   List<File?> _selectedImages = [];
 
+  // Email validation
+  bool _isValidEmail(String email) {
+    final emailRegex = RegExp(
+      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+    );
+    return emailRegex.hasMatch(email);
+  }
 
 
-void showImageNoticeDialog(BuildContext context, Color accentGreen) {
+  void showImageNoticeDialog(BuildContext context, Color accentGreen) {
   showDialog(
     context: context,
-    barrierDismissible: false, 
+    barrierDismissible: false,
     builder: (BuildContext dialogContext) {
       return AlertDialog(
         title: Row(
           children: [
-            Icon(Icons.info, color: Colors.blueAccent), 
+            Icon(Icons.info, color: Colors.blueAccent),
             SizedBox(width: 10),
             Text('Notice !'),
           ],
         ),
-        
         content: Text(
           "All account with fake images that donot contain people will be banned permanently to protect our users from scammers. All earned virtual gifts will be revoked. You can always change your selection by clicking on 'pick images' or 'continue' if you are confident with your selection. Thanks.",
         ),
-        
         actions: <Widget>[
           TextButton(
             onPressed: () async {
-              Navigator.of(dialogContext).pop(); 
+              Navigator.of(dialogContext).pop();
 
               List<XFile>? images = await ImagePicker().pickMultiImage(
                 imageQuality: 85,
@@ -103,8 +117,12 @@ void showImageNoticeDialog(BuildContext context, Color accentGreen) {
                   if (tempImages.length == 4) break;
                   tempImages.add(File(image.path));
                 }
-                
-                
+
+                // ADD THIS setState() TO UPDATE THE UI
+                setState(() {
+                  _selectedImages = tempImages;
+                });
+
                 print('Selected ${tempImages.length} images.');
               }
             },
@@ -113,10 +131,9 @@ void showImageNoticeDialog(BuildContext context, Color accentGreen) {
               style: TextStyle(color: accentGreen),
             ),
           ),
-          
           TextButton(
             onPressed: () {
-              Navigator.of(dialogContext).pop(); 
+              Navigator.of(dialogContext).pop();
             },
             child: Text(
               "CONTINUE",
@@ -129,16 +146,13 @@ void showImageNoticeDialog(BuildContext context, Color accentGreen) {
   );
 }
 
+
   Future<void> _pickImages() async {
     if (_selectedImages.isEmpty) {
       showImageNoticeDialog(context, _accentGreen);
-    
-
-    
     } else {
       List<XFile>? images = await ImagePicker().pickMultiImage(
         imageQuality: 85,
-        maxWidth: 500,
       );
 
       if (images != null) {
@@ -295,7 +309,7 @@ void showImageNoticeDialog(BuildContext context, Color accentGreen) {
               scrollDirection: Axis.horizontal,
               physics: const NeverScrollableScrollPhysics(),
               children: [
-                _buildPhonePage(),
+                _buildPhoneEmailPage(),
                 _buildOtpPage(),
                 _buildNamePage(),
                 _buildPasswordPage(),
@@ -309,7 +323,7 @@ void showImageNoticeDialog(BuildContext context, Color accentGreen) {
     );
   }
 
-  Widget _buildPhonePage() {
+  Widget _buildPhoneEmailPage() {
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -326,11 +340,19 @@ void showImageNoticeDialog(BuildContext context, Color accentGreen) {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.phone_android, color: _primaryOrange, size: 28),
+                  Icon(
+                    _registrationType == RegistrationType.Phone
+                        ? Icons.phone_android
+                        : Icons.email,
+                    color: _primaryOrange,
+                    size: 28,
+                  ),
                   SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Enter your phone number',
+                      _registrationType == RegistrationType.Phone
+                          ? 'Enter your phone number'
+                          : 'Enter your email address',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -341,47 +363,196 @@ void showImageNoticeDialog(BuildContext context, Color accentGreen) {
                 ],
               ),
             ),
-            SizedBox(height: 32),
-            TextFormField(
-              controller: phonecontroller,
-              keyboardType: TextInputType.phone,
-              style: TextStyle(fontSize: 16, color: _deepBrown),
-              decoration: InputDecoration(
-                labelText: "Phone Number",
-                hintText: "078... or 075...",
-                prefixIcon: Icon(Icons.phone, color: _primaryOrange),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide.none,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(color: _primaryOrange.withOpacity(0.2)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(color: _primaryOrange, width: 2),
-                ),
-                labelStyle: TextStyle(color: _deepBrown.withOpacity(0.7)),
+            SizedBox(height: 24),
+            // Registration type toggle
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _registrationType = RegistrationType.Phone;
+                        });
+                      },
+                      child: Container(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: _registrationType == RegistrationType.Phone
+                              ? _primaryOrange
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.phone,
+                              color: _registrationType == RegistrationType.Phone
+                                  ? Colors.white
+                                  : _deepBrown.withOpacity(0.5),
+                              size: 20,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'Phone',
+                              style: TextStyle(
+                                color: _registrationType == RegistrationType.Phone
+                                    ? Colors.white
+                                    : _deepBrown.withOpacity(0.5),
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _registrationType = RegistrationType.Email;
+                        });
+                      },
+                      child: Container(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: _registrationType == RegistrationType.Email
+                              ? _primaryOrange
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.email,
+                              color: _registrationType == RegistrationType.Email
+                                  ? Colors.white
+                                  : _deepBrown.withOpacity(0.5),
+                              size: 20,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'Email',
+                              style: TextStyle(
+                                color: _registrationType == RegistrationType.Email
+                                    ? Colors.white
+                                    : _deepBrown.withOpacity(0.5),
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
+            SizedBox(height: 32),
+            // Input field based on selected type
+            if (_registrationType == RegistrationType.Phone)
+              TextFormField(
+                controller: phonecontroller,
+                keyboardType: TextInputType.phone,
+                style: TextStyle(fontSize: 16, color: _deepBrown),
+                decoration: InputDecoration(
+                  labelText: "Phone Number",
+                  hintText: "078... or 075...",
+                  prefixIcon: Icon(Icons.phone, color: _primaryOrange),
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: _primaryOrange.withOpacity(0.2)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: _primaryOrange, width: 2),
+                  ),
+                  labelStyle: TextStyle(color: _deepBrown.withOpacity(0.7)),
+                ),
+              )
+            else
+              TextFormField(
+                controller: emailcontroller,
+                keyboardType: TextInputType.emailAddress,
+                style: TextStyle(fontSize: 16, color: _deepBrown),
+                decoration: InputDecoration(
+                  labelText: "Email Address",
+                  hintText: "example@mail.com",
+                  prefixIcon: Icon(Icons.email, color: _primaryOrange),
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: _primaryOrange.withOpacity(0.2)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: _primaryOrange, width: 2),
+                  ),
+                  labelStyle: TextStyle(color: _deepBrown.withOpacity(0.7)),
+                ),
+              ),
             SizedBox(height: 32),
             _buildModernButton(
               text: 'Send OTP',
               isLoading: _isLoadingSendOtp,
               onTap: () async {
-                if (phonecontroller.text.isEmpty) {
-                  _showSnackBar('Phone Number cannot be empty', ContentType.warning);
-                  return;
+                // Validate input based on registration type
+                if (_registrationType == RegistrationType.Phone) {
+                  if (phonecontroller.text.isEmpty) {
+                    _showSnackBar('Phone Number cannot be empty', ContentType.warning);
+                    return;
+                  }
+                } else {
+                  if (emailcontroller.text.isEmpty) {
+                    _showSnackBar('Email Address cannot be empty', ContentType.warning);
+                    return;
+                  }
+                  if (!_isValidEmail(emailcontroller.text)) {
+                    _showSnackBar('Please enter a valid email address', ContentType.warning);
+                    return;
+                  }
                 }
 
                 setState(() => _isLoadingSendOtp = true);
 
-                bool response = await context
-                    .read<RegisterProvider>()
-                    .sendotp(phonecontroller.text, context);
+                bool response;
+                if (_registrationType == RegistrationType.Phone) {
+                  response = await context
+                      .read<RegisterProvider>()
+                      .sendotp(phonecontroller.text, context);
+                } else {
+         
+                  response = await context
+                      .read<RegisterProvider>()
+                      .sendEmailOtp(emailcontroller.text, context);
+                }
 
                 setState(() => _isLoadingSendOtp = false);
 
@@ -419,7 +590,7 @@ void showImageNoticeDialog(BuildContext context, Color accentGreen) {
             ),
             SizedBox(height: 24),
             Text(
-              "Verify Your Number",
+              "Verify Your ${_registrationType == RegistrationType.Phone ? 'Number' : 'Email'}",
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -428,7 +599,9 @@ void showImageNoticeDialog(BuildContext context, Color accentGreen) {
             ),
             SizedBox(height: 12),
             Text(
-              "Enter the 5-digit code sent to your phone",
+              _registrationType == RegistrationType.Phone
+                  ? "Enter the 5-digit code sent to your phone"
+                  : "Enter the 5-digit code sent to your email",
               style: TextStyle(
                 fontSize: 14,
                 color: _deepBrown.withOpacity(0.6),
@@ -576,7 +749,6 @@ void showImageNoticeDialog(BuildContext context, Color accentGreen) {
                       firstnamecontroller.text,
                       lastnamecontroller.text,
                       context,
-                      
                     );
 
                 setState(() => _isLoadingUserDetails = false);
@@ -709,7 +881,6 @@ void showImageNoticeDialog(BuildContext context, Color accentGreen) {
                       password.text,
                       confirmpassword.text,
                       context,
-                      
                     );
 
                 setState(() => _isLoadingPassword = false);
@@ -830,7 +1001,6 @@ void showImageNoticeDialog(BuildContext context, Color accentGreen) {
                       _selectedGender.toString(),
                       _selectedDate,
                       context,
-                      
                     );
 
                 if (res) {
@@ -1113,51 +1283,40 @@ void showImageNoticeDialog(BuildContext context, Color accentGreen) {
                 setState(() => _isLoadingRegister = false);
 
                 if (response) {
-                showDialog(
-    context: context,
-    // Prevents closing the dialog by tapping outside for focus
-    barrierDismissible: false,
-    builder: (BuildContext dialogContext) {
-      return AlertDialog(
-        // 🥇 Title and Icon Replacement (CoolAlertType.success)
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: [
-            // Use a checkmark icon for success
-            Icon(Icons.check_circle, color: Colors.green), 
-            SizedBox(width: 10),
-            Text('Welcome! 🎉'),
-          ],
-        ),
-        
-        // 💬 Content
-        content: const Text(
-          "Your account has been created successfully! We have a surprise gift for you. Login to redeem it from the gifts section.",
-        ),
-        
-        // 👆 Actions (Buttons)
-        actions: <Widget>[
-          TextButton(
-            onPressed: () {
-              // The original logic required two .pop() calls:
-              // 1. pop the dialog itself
-              Navigator.of(dialogContext).pop(); 
-              // 2. pop the previous screen (e.g., the sign-up screen)
-              Navigator.of(context).pop(); 
-            },
-            // Apply the custom color to the text and make it bold for emphasis
-            child: Text(
-              "GET STARTED", 
-              style: TextStyle(
-                color: _accentGreen,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      );
-    },
-  );
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (BuildContext dialogContext) {
+                      return AlertDialog(
+                        title: Row(
+                          mainAxisAlignment: MainAxisAlignment.start,
+                          children: [
+                            Icon(Icons.check_circle, color: Colors.green),
+                            SizedBox(width: 10),
+                            Text('Welcome! 🎉'),
+                          ],
+                        ),
+                        content: const Text(
+                          "Your account has been created successfully! We have a surprise gift for you. Login to redeem it from the gifts section.",
+                        ),
+                        actions: <Widget>[
+                          TextButton(
+                            onPressed: () {
+                              Navigator.of(dialogContext).pop();
+                              Navigator.of(context).pop();
+                            },
+                            child: Text(
+                              "GET STARTED",
+                              style: TextStyle(
+                                color: _accentGreen,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  );
                 }
               },
             ),

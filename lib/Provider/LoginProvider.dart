@@ -5,17 +5,21 @@ import 'package:flutter/material.dart';
 import 'package:easingles/Models/Authmodel.dart';
 import 'package:easingles/assets/urlconfig.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
-// import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-// static const url="http:localhost:3000";
 class LoginProvider extends ChangeNotifier {
   late String apikey;
   late String firstname;
   late String lastName;
   late String username;
   late String password;
+
+
+  Future<bool> loginWithEmail(String email, String password, BuildContext context) async {
+
+  return false;
+}
 
   Future<bool> login(
       String username,
@@ -60,7 +64,6 @@ class LoginProvider extends ChangeNotifier {
           ScaffoldMessenger.of(context)
             ..hideCurrentSnackBar()
             ..showSnackBar(snackBar);
-          // Extract user data from decoded JSON
           User finalData = User.fromJson(data);
           final SharedPreferences prefs = await SharedPreferences.getInstance();
           await prefs.setString('token', finalData.token);
@@ -69,7 +72,6 @@ class LoginProvider extends ChangeNotifier {
 
           return true;
         } catch (e) {
-          // Handle any errors during the process
           print("Error during login:");
           return false;
         }
@@ -90,7 +92,6 @@ class LoginProvider extends ChangeNotifier {
         return false;
       } else if (response.statusCode == 400) {
         const snackBar = SnackBar(
-          /// need to set following properties for best effect of flutter_snackbar_content
           elevation: 0,
           behavior: SnackBarBehavior.floating,
           backgroundColor: Colors.orange,
@@ -106,7 +107,6 @@ class LoginProvider extends ChangeNotifier {
         return false;
       } else {
         const snackBar = SnackBar(
-          /// need to set following properties for best effect of flutter_snackbar_content
           elevation: 0,
           behavior: SnackBarBehavior.floating,
           backgroundColor: Colors.orange,
