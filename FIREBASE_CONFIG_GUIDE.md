@@ -12,7 +12,7 @@ Based on your service account, your Firebase project ID is: **twinbrook-12f84**
 4. Click on **"Your apps"** section
 5. Click **"Add app"** → **Android** (or iOS if needed)
 6. Fill in:
-   - **Android package name**: `com.example.easingles`
+   - **Android package name**: `com.yodate.com`
    - **App nickname**: `easingles`
    - **Debug signing certificate**: Leave empty for now
 7. Click **"Register app"**
@@ -102,7 +102,43 @@ service cloud.firestore {
 }
 ```
 
-### 6. Test Your Setup
+### 6. Update Gradle Files (Already Done! ✅)
+
+I've already updated your Android Gradle files:
+
+**Root-level build.gradle.kts** - Added Google services plugin:
+```kotlin
+plugins {
+    id("com.android.application") version "8.9.1" apply false
+    id("org.jetbrains.kotlin.android") version "1.8.22" apply false
+    // Add the dependency for the Google services Gradle plugin
+    id("com.google.gms.google-services") version "4.4.4" apply false
+}
+```
+
+**App-level build.gradle.kts** - Added plugin and Firebase dependencies:
+```kotlin
+plugins {
+    id("com.android.application")
+    id("kotlin-android")
+    id("dev.flutter.flutter-gradle-plugin")
+    // Add the Google services Gradle plugin
+    id("com.google.gms.google-services")
+}
+
+dependencies {
+    // Import the Firebase BoM
+    implementation(platform("com.google.firebase:firebase-bom:34.6.0"))
+
+    // Add the dependencies for Firebase products you want to use
+    implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.firebase:firebase-storage")
+    implementation("com.google.firebase:firebase-auth")
+}
+```
+
+### 7. Test Your Setup
 
 ```bash
 flutter clean

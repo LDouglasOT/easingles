@@ -98,7 +98,7 @@ class _Login_pageState extends State<Login_page> {
       ) {
         signIn.authenticationEvents
             .listen((GoogleSignInAuthenticationEvent event) {
-              // Handle authentication event
+           
               print('Google Sign-In Event: $event');
             }, onError: (Object error) {
               print('Google Sign-In Stream Error: $error');

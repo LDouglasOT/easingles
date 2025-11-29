@@ -40,9 +40,7 @@ void main() async {
   String? userId = await OneSignal.User.getOnesignalId();
   print(userId);
   SharedPreferences prefs = await SharedPreferences.getInstance();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp();
   var token = prefs.getString('id');
   var intro = prefs.getString('intro');
   if (intro == null) {

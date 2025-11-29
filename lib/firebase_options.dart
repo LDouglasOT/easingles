@@ -68,7 +68,7 @@ class DefaultFirebaseOptions {
     projectId: 'twinbrook-12f84',
     storageBucket: 'twinbrook-12f84.appspot.com',
     iosClientId: 'Placeholder-iOS-Client-ID',
-    iosBundleId: 'com.example.easingles',
+    iosBundleId: 'com.yodate.com',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
@@ -78,6 +78,6 @@ class DefaultFirebaseOptions {
     projectId: 'twinbrook-12f84',
     storageBucket: 'twinbrook-12f84.appspot.com',
     iosClientId: 'Placeholder-macOS-Client-ID',
-    iosBundleId: 'com.example.easingles',
+    iosBundleId: 'com.yodate.com',
   );
 }
