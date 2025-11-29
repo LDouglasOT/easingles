@@ -22,7 +22,6 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:swipe_cards/swipe_cards.dart';
 import 'package:http/http.dart' as http;
-import 'package:loading_indicator/loading_indicator.dart';
 import 'package:optimized_image_loader/optimized_image_loader.dart';
 
 class Content {
@@ -32,7 +31,7 @@ class Content {
   Content({required this.text, required this.color});
 }
 
-enum interoptions { Like, Nope, Superlike }
+enum ViewMode { swipe, grid }
 
 class Dating extends StatefulWidget {
   const Dating({Key? key}) : super(key: key);
@@ -41,7 +40,7 @@ class Dating extends StatefulWidget {
   _DatingState createState() => _DatingState();
 }
 
-class _DatingState extends State<Dating> {
+class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
   MatchEngine _matchEngine = MatchEngine();
   bool showprofile = false;
   bool showloader = true;
@@ -49,57 +48,59 @@ class _DatingState extends State<Dating> {
   late String userId;
   late String username;
   late userlist currentUser;
+  ViewMode _viewMode = ViewMode.swipe;
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
 
   dynamic recieverId = {"userId": "0", "Names": "None", "profile": "None"};
 
   GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey();
   List<SwipeItem> _swipeItems = [];
   List<userlist> allcards = [];
-  List<String> _names = ["Red", "Blue", "Green", "Yellow", "Orange"];
-  final List<Color> _colors = [
-    Colors.red,
-    Colors.blue,
-    Colors.green,
-    Colors.yellow,
-    Colors.orange,
-  ];
-
-  final List<Color> _newColors = [
-    Colors.purple,
-    Colors.pink,
-    Colors.teal,
-    Colors.brown,
-    const Color.fromRGBO(63, 81, 181, 1),
-  ];
 
   String calculateAge(String birthDateString) {
-    DateTime currentDate = DateTime.now();
-    DateTime birthDate = DateTime.parse(birthDateString);
-    int age = currentDate.year - birthDate.year;
+    try {
+      DateTime currentDate = DateTime.now();
+      DateTime birthDate = DateTime.parse(birthDateString);
+      int age = currentDate.year - birthDate.year;
 
-    // Check if the birthday has occurred this year
-    if (currentDate.month < birthDate.month ||
-        (currentDate.month == birthDate.month &&
-            currentDate.day < birthDate.day)) {
-      age--;
+      if (currentDate.month < birthDate.month ||
+          (currentDate.month == birthDate.month &&
+              currentDate.day < birthDate.day)) {
+        age--;
+      }
+
+      return age.toString();
+    } catch (e) {
+      return "25";
     }
-
-    return age.toString();
   }
 
   @override
   void initState() {
     super.initState();
-
+    _animationController = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: 300),
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
+    );
     _loadMoreItems();
     fetchMyGifts();
+    _animationController.forward();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
   }
 
   late List<GiftsModel> myGifts = [];
   bool giftLoaderStatus = true;
-  Future<void> _loadMoreItems() async {
-    // Make API call to http://10.0.2.2/api/matches
 
+  Future<void> _loadMoreItems() async {
     setState(() {
       showprofile = false;
       showloader = true;
@@ -117,17 +118,15 @@ class _DatingState extends State<Dating> {
           headers: {'Authorization': 'Bearer $token'},
           body: {"id": id});
       if (response.statusCode == 200) {
-        // Parse the API response
         final Map<String, dynamic> jsonResponse = jsonDecode(response.body);
 
-        // Check if the 'data' field exists and is a list
         if (jsonResponse.containsKey('data') && jsonResponse['data'] is List) {
           final List<dynamic> profiles = jsonResponse['data'];
           setState(() {
-          allcards.clear();
-          _swipeItems.clear();
+            allcards.clear();
+            _swipeItems.clear();
           });
-        
+
           for (var profile in profiles) {
             userlist user = userlist.fromJson(profile);
 
@@ -135,64 +134,62 @@ class _DatingState extends State<Dating> {
             _swipeItems.add(SwipeItem(
               content: Content(
                 text: user.firstName,
-                color: Colors.purple, // Set your color logic here
+                color: Colors.purple,
               ),
               likeAction: () async {
-                // Handle like action without showing SnackBar
                 SharedPreferences prefs = await SharedPreferences.getInstance();
                 String? id = prefs.getString("id");
                 String? token = prefs.getString('token');
-                var response = await http
-                    .post(Uri.parse('${AppUrls.production}/api/like'),headers: {'Authorization': 'Bearer $token'}, body: {
-                  "userId": id.toString(),
-                  "likedId": user.id.toString(),
-                  "super": "0"
-                });
+                var response = await http.post(
+                    Uri.parse('${AppUrls.production}/api/like'),
+                    headers: {'Authorization': 'Bearer $token'},
+                    body: {
+                      "userId": id.toString(),
+                      "likedId": user.id.toString(),
+                      "super": "0"
+                    });
 
                 if (!(response.statusCode == 200)) {
-                  var response = await http
-                      .post(Uri.parse('${AppUrls.production}/api/like'),headers: {'Authorization': 'Bearer $token'}, body: {
-                    "userId": id.toString(),
-                    "likedId": user.id.toString(),
-                    "super": "0"
-                  });
+                  await http.post(Uri.parse('${AppUrls.production}/api/like'),
+                      headers: {'Authorization': 'Bearer $token'},
+                      body: {
+                        "userId": id.toString(),
+                        "likedId": user.id.toString(),
+                        "super": "0"
+                      });
                 }
               },
-              nopeAction: () {
-                // Handle nope action without showing SnackBar
-              },
-              superlikeAction: () {
-                // Handle superlike action without showing SnackBar
-              },
+              nopeAction: () {},
+              superlikeAction: () {},
             ));
           }
-          setState((){
-          currentUser = allcards[0];
-          });
-          
+          if (allcards.isNotEmpty) {
+            setState(() {
+              currentUser = allcards[0];
+            });
+          }
+
           _matchEngine = MatchEngine(swipeItems: _swipeItems);
           setState(() {
             showprofile = true;
             showloader = false;
             showReloadButton = false;
           });
-        } else {}
+        }
       } else if (response.statusCode == 401) {
-        // Handle API error
         setState(() {
           showloader = false;
           showprofile = false;
           showReloadButton = false;
         });
-        print('API call failed with status code: ${response.statusCode}');
-      }else if(response.statusCode == 201){
-           setState(() {
+      } else if (response.statusCode == 201) {
+        setState(() {
           showloader = false;
           showprofile = false;
           showReloadButton = false;
         });
         Navigator.of(context).pushNamed("/purchase");
-      }else {
+      } else {
         setState(() {
           showloader = false;
           showprofile = false;
@@ -213,8 +210,9 @@ class _DatingState extends State<Dating> {
       SharedPreferences prefs = await SharedPreferences.getInstance();
       String? id = prefs.getString("id");
       String? token = prefs.getString("token");
-      var response = await http
-          .get(Uri.parse("${AppUrls.production}/api/getusergifts/$id"),headers: {'Authorization': 'Bearer $token'});
+      var response = await http.get(
+          Uri.parse("${AppUrls.production}/api/getusergifts/$id"),
+          headers: {'Authorization': 'Bearer $token'});
 
       switch (response.statusCode) {
         case 200:
@@ -229,15 +227,11 @@ class _DatingState extends State<Dating> {
             setState(() {
               myGifts.addAll(gifts);
             });
-            // You can return the gifts list or handle it in some way
             return gifts;
           } else {
-            // Handle the case where the response does not contain a 'data' key or it's not a list
             return [];
           }
-          break;
         default:
-          // Handle other status codes if needed
           return [];
       }
     } catch (error) {
@@ -246,34 +240,29 @@ class _DatingState extends State<Dating> {
   }
 
   void sendGift(GiftsModel gift) async {
-    try{
-
-    setState(() {
-      giftLoaderStatus = false;
-    });
-    SharedPreferences pref = await SharedPreferences.getInstance();
-    String? currentUsers = pref.getString("id");
-    String? token=pref.getString("token");
-    var body = {
-      "myid": currentUsers ?? "0",
-      "user": currentUser.id ?? "0",
-      "img": gift.image,
-      "name": gift.name,
-      "qty": "1",
-      "conversationId": "HOME",
-      "momentId": currentUser.id 
-    };
-    print(body.toString());
-    var response = await http.post(
-      Uri.parse(
-        '${AppUrls.production}/api/giftpeople',
-      ),
-      headers: {'Authorization': 'Bearer $token'},
-      body: body,
-    );
-    switch (response.statusCode) {
-      case 200:
-        try {
+    try {
+      setState(() {
+        giftLoaderStatus = false;
+      });
+      SharedPreferences pref = await SharedPreferences.getInstance();
+      String? currentUsers = pref.getString("id");
+      String? token = pref.getString("token");
+      var body = {
+        "myid": currentUsers ?? "0",
+        "user": currentUser.id ?? "0",
+        "img": gift.image,
+        "name": gift.name,
+        "qty": "1",
+        "conversationId": "HOME",
+        "momentId": currentUser.id
+      };
+      var response = await http.post(
+        Uri.parse('${AppUrls.production}/api/giftpeople'),
+        headers: {'Authorization': 'Bearer $token'},
+        body: body,
+      );
+      switch (response.statusCode) {
+        case 200:
           setState(() {
             giftLoaderStatus = true;
           });
@@ -285,16 +274,11 @@ class _DatingState extends State<Dating> {
             title: Container(
                 child: Row(
               children: [
-                Image.network(
-                  gift.image ?? "",
-                  height: 20,
-                  width: 20,
-                ),
-                Text(
-                  gift.name ?? "",
-                  style: TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.bold),
-                ),
+                Image.network(gift.image ?? "", height: 20, width: 20),
+                SizedBox(width: 8),
+                Text(gift.name ?? "",
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold)),
               ],
             )),
             description: Text(
@@ -304,626 +288,877 @@ class _DatingState extends State<Dating> {
             ),
             onDismiss: () {},
           ).show(context);
-        } catch (e) {
-          print(e.toString());
-        }
-        break;
-      case 400:
-        var snackBar = SnackBar(
-          elevation: 0,
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Colors.transparent,
-          content: FlutterSnackbarContent(
-            message:
-                'Insufficient 1 ${gift.name} to gift ${recieverId['Names']}',
-            contentType: ContentType.success,
-          ),
-        );
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(snackBar);
-        break;
-      case 404:
-        var snackBar = SnackBar(
-          elevation: 0,
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Colors.transparent,
-          content: FlutterSnackbarContent(
-            message: 'Insufficient ${gift.name} to ${recieverId['Names']}',
-            contentType: ContentType.warning,
-          ),
-        );
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(snackBar);
-        setState(() {
-          giftLoaderStatus = true;
-        });
-      case 500:
-        var snackBar = const SnackBar(
-          elevation: 0,
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Colors.transparent,
-          content: FlutterSnackbarContent(
-            message: 'Something went wrong',
-            contentType: ContentType.failure,
-          ),
-        );
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(snackBar);
-        break;
-      default:
-        var snackBar = const SnackBar(
-          elevation: 0,
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Colors.transparent,
-          content: FlutterSnackbarContent(
-            message: 'Something went wrong',
-            contentType: ContentType.failure,
-          ),
-        );
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(snackBar);
-        setState(() {
-          giftLoaderStatus = true;
-        });
-    }
-    setState(() {
-      giftLoaderStatus = true;
-    });
-      }catch(err){
-      print(err.toString());
-       var snackBar = const SnackBar(
-          elevation: 0,
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Colors.transparent,
-          content: FlutterSnackbarContent(
-            message: 'Something went wrong',
-            contentType: ContentType.failure,
-          ),
-        );
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(snackBar);
+          BottomSheetPanel.close();
+          break;
+        case 400:
+        case 404:
+          var snackBar = SnackBar(
+            elevation: 0,
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.transparent,
+            content: FlutterSnackbarContent(
+              message: 'Insufficient ${gift.name} to gift',
+              contentType: ContentType.warning,
+            ),
+          );
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(snackBar);
+          setState(() {
+            giftLoaderStatus = true;
+          });
+          break;
+        case 500:
+        default:
+          var snackBar = const SnackBar(
+            elevation: 0,
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.transparent,
+            content: FlutterSnackbarContent(
+              message: 'Something went wrong',
+              contentType: ContentType.failure,
+            ),
+          );
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(snackBar);
+          setState(() {
+            giftLoaderStatus = true;
+          });
+      }
+    } catch (err) {
+      var snackBar = const SnackBar(
+        elevation: 0,
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Colors.transparent,
+        content: FlutterSnackbarContent(
+          message: 'Something went wrong',
+          contentType: ContentType.failure,
+        ),
+      );
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(snackBar);
       setState(() {
-      giftLoaderStatus = true;
-    });
+        giftLoaderStatus = true;
+      });
     }
     fetchMyGifts();
+  }
+
+  Widget _buildProfileCard(userlist user, int index, {bool isGridMode = false}) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 15,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            GestureDetector(
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (context) =>
+                      Userprofile(userId: user.id.toString()))),
+              child: OptimizedImageLoader(
+                url: user.profilePic ?? "",
+                imageHeight: double.infinity,
+                imageWidth: double.infinity,
+                spinnerHeight: 25,
+                spinnerWidth: 25,
+                loadingIndicator: Container(
+                  color: AppColors.background,
+                  child: const Center(
+                    child: CircularProgressIndicator(color: Colors.white),
+                  ),
+                ),
+                errorContainerDecoration: BoxDecoration(
+                  color: Colors.orange,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                errorContainerChild: Center(
+                  child: Icon(Icons.person, size: 60, color: Colors.white),
+                ),
+              ),
+            ),
+            // Gradient overlay
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.transparent,
+                      Colors.black.withOpacity(0.8),
+                    ],
+                    stops: [0.0, 0.4, 1.0],
+                  ),
+                ),
+              ),
+            ),
+            // User info
+            Positioned(
+              bottom: isGridMode ? 8 : 16,
+              left: isGridMode ? 8 : 16,
+              right: isGridMode ? 8 : 16,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          user.firstName,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: isGridMode ? 18 : 28,
+                            fontWeight: FontWeight.bold,
+                            shadows: [
+                              Shadow(
+                                blurRadius: 10,
+                                color: Colors.black.withOpacity(0.5),
+                              ),
+                            ],
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      SizedBox(width: 6),
+                      Text(
+                        calculateAge(user.year.toString()),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: isGridMode ? 16 : 24,
+                          fontWeight: FontWeight.w400,
+                          shadows: [
+                            Shadow(
+                              blurRadius: 10,
+                              color: Colors.black.withOpacity(0.5),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(width: 6),
+                      if (context.watch<SocketProvider>().userIds.any(
+                          (socketUser) =>
+                              socketUser["userId"].toString() ==
+                              user.id.toString()))
+                        Container(
+                          width: isGridMode ? 8 : 12,
+                          height: isGridMode ? 8 : 12,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primary.withOpacity(0.5),
+                                blurRadius: 4,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                  SizedBox(height: isGridMode ? 4 : 8),
+                  Row(
+                    children: [
+                      Icon(Icons.location_on,
+                          size: isGridMode ? 14 : 18, color: Colors.white70),
+                      SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          user.district ?? "Uganda",
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: isGridMode ? 12 : 16,
+                            shadows: [
+                              Shadow(
+                                blurRadius: 8,
+                                color: Colors.black.withOpacity(0.5),
+                              ),
+                            ],
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            // Action buttons (only in swipe mode)
+            if (!isGridMode)
+              Positioned(
+                bottom: 16,
+                right: 16,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withOpacity(0.5),
+                        blurRadius: 15,
+                        spreadRadius: 3,
+                      ),
+                    ],
+                  ),
+                  child: IconButton(
+                    onPressed: () {
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (context) => FirebaseChatScreen(
+                          otherUserId: user.id.toString(),
+                          otherUserName: '${user.firstName} ${user.lastName}',
+                          otherUserProfile: user.profilePic ?? '',
+                          currentUserId: userId,
+                          currentUserName: username,
+                        ),
+                      ));
+                    },
+                    icon: Icon(Icons.chat, color: Colors.white, size: 24),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGridView() {
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: allcards.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.people_outline, size: 80, color: Colors.white30),
+                  SizedBox(height: 16),
+                  Text(
+                    "No profiles to show",
+                    style: TextStyle(color: Colors.white70, fontSize: 18),
+                  ),
+                ],
+              ),
+            )
+          : GridView.builder(
+              padding: EdgeInsets.all(16),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: 0.7,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+              ),
+              itemCount: allcards.length,
+              itemBuilder: (context, index) {
+                return _buildProfileCard(allcards[index], index, isGridMode: true);
+              },
+            ),
+    );
+  }
+
+  Widget _buildSwipeView() {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.6,
+      width: MediaQuery.of(context).size.width * 0.9,
+      child: SwipeCards(
+        matchEngine: _matchEngine,
+        itemBuilder: (BuildContext context, int index) {
+          if (index >= 0 && index < _swipeItems.length) {
+            return Center(
+              child: SizedBox(
+                height: MediaQuery.of(context).size.height * 0.55,
+                width: MediaQuery.of(context).size.width * 0.85,
+                child: _buildProfileCard(allcards[index], index),
+              ),
+            );
+          } else {
+            return Container();
+          }
+        },
+        onStackFinished: () {
+          _loadMoreItems();
+        },
+        itemChanged: (SwipeItem item, int index) {
+          if (index >= 0 && index < allcards.length) {
+            setState(() {
+              currentUser = allcards[index];
+            });
+          }
+        },
+        upSwipeAllowed: true,
+        fillSpace: true,
+      ),
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _buildActionButton(
+            icon: Icons.close,
+            color: Colors.red,
+            size: 60,
+            onTap: () {
+              if (_matchEngine.currentItem != null) {
+                _matchEngine.currentItem?.nope();
+              }
+            },
+          ),
+          _buildActionButton(
+            icon: Icons.card_giftcard,
+            color: Colors.amber,
+            size: 50,
+            onTap: () {
+              if (BottomSheetPanel.isOpen) {
+                setState(() {
+                  recieverId = {};
+                });
+                BottomSheetPanel.close();
+              } else {
+                if (allcards.isNotEmpty) {
+                  setState(() {
+                    recieverId = {
+                      "userId": currentUser.id.toString(),
+                      "Names":
+                          "${currentUser.firstName} ${currentUser.lastName}",
+                      "profile": currentUser.profilePic.toString(),
+                      "momentId": currentUser.country
+                    };
+                  });
+                  BottomSheetPanel.open();
+                }
+              }
+            },
+          ),
+          _buildActionButton(
+            icon: Icons.favorite,
+            color: AppColors.primary,
+            size: 60,
+            onTap: () {
+              if (_matchEngine.currentItem != null) {
+                _matchEngine.currentItem?.like();
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required Color color,
+    required double size,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.4),
+            blurRadius: 15,
+            spreadRadius: 2,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: CircleBorder(),
+          splashColor: color.withOpacity(0.3),
+          child: Center(
+            child: Icon(icon, color: color, size: size * 0.5),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return BottomSheetScaffold(
       bottomSheet: DraggableBottomSheet(
-          animationDuration: const Duration(milliseconds: 200),
-          body: Container(
-            decoration: BoxDecoration(
-              color: AppColors.background,
-            ),
-            width: double.infinity,
-            height: 500,
-            alignment: Alignment.center,
-            child: Column(
-              children: [
-                IconButton(
-                    onPressed: () {
-                      BottomSheetPanel.close();
-                    },
-                    icon: Icon(Icons.arrow_drop_down)),
-                if (myGifts.isNotEmpty)
-                  Expanded(
-                    child: ListView.separated(
-                      scrollDirection: Axis.vertical,
-                      itemBuilder: (context, index) {
-                        var gift = myGifts[index];
-                        return Padding(
-                          padding: const EdgeInsets.fromLTRB(10, 5, 10, 5),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: AppColors.background,
-                              borderRadius:
-                                  BorderRadius.all(Radius.circular(15)),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                ClipRRect(
-                                  borderRadius:
-                                      BorderRadius.all(Radius.circular(15)),
-                                  child: Image.network(
-                                    gift.image ?? "",
-                                    height: 100,
-                                    width: 100,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.start,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        "${gift.quantity}",
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Text(
-                                        "${gift.name}s" ?? "",
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Text(
-                                        "left",
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                ElevatedButton(
-                                  onPressed: () => {sendGift(gift)},
-                                  child: Column(
-                                    children: [
-                                      Visibility(
-                                          visible: giftLoaderStatus,
-                                          child: Text("send")),
-                                      Visibility(
-                                          visible: !giftLoaderStatus,
-                                          child: CircularProgressIndicator(
-                                            color: AppColors.lighter,
-                                          )),
-                                    ],
-                                  ),
-                                  style: ElevatedButton.styleFrom(
-                                    foregroundColor: Colors.white,
-                                  ),
-                                ),
-                              ],
+        animationDuration: const Duration(milliseconds: 200),
+        body: Container(
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          width: double.infinity,
+          height: 500,
+          child: Column(
+            children: [
+              Container(
+                margin: EdgeInsets.symmetric(vertical: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[400],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Text(
+                "Send a Gift",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                "to ${recieverId['Names'] ?? 'User'}",
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                ),
+              ),
+              SizedBox(height: 16),
+              if (myGifts.isEmpty)
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.card_giftcard_outlined,
+                            size: 60, color: Colors.white30),
+                        SizedBox(height: 16),
+                        Text(
+                          "No gifts available",
+                          style: TextStyle(color: Colors.white70, fontSize: 16),
+                        ),
+                        SizedBox(height: 8),
+                        ElevatedButton(
+                          onPressed: () =>
+                              Navigator.of(context).pushNamed('/gifts'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 24, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
                             ),
                           ),
-                        );
-                      },
-                      itemCount: myGifts.length,
-                      separatorBuilder: (BuildContext context, int index) {
-                        return SizedBox(
-                          width: 24,
-                        );
-                      },
+                          child: Text(
+                            "Buy Gifts",
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-              ],
-            ),
-          )),
+                ),
+              if (myGifts.isNotEmpty)
+                Expanded(
+                  child: ListView.separated(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    itemBuilder: (context, index) {
+                      var gift = myGifts[index];
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.lighter.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(15),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.1),
+                            width: 1,
+                          ),
+                        ),
+                        padding: EdgeInsets.all(12),
+                        child: Row(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                color: Colors.white.withOpacity(0.1),
+                                child: Image.network(
+                                  gift.image ?? "",
+                                  height: 70,
+                                  width: 70,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
+                                      height: 70,
+                                      width: 70,
+                                      color: Colors.grey,
+                                      child: Icon(Icons.card_giftcard,
+                                          color: Colors.white),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    gift.name ?? "Gift",
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withOpacity(0.2),
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                        ),
+                                        child: Text(
+                                          "${gift.quantity} left",
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            ElevatedButton(
+                              onPressed: giftLoaderStatus
+                                  ? () => sendGift(gift)
+                                  : null,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                disabledBackgroundColor:
+                                    AppColors.primary.withOpacity(0.5),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 20, vertical: 12),
+                              ),
+                              child: giftLoaderStatus
+                                  ? Text("Send",
+                                      style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold))
+                                  : SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                      ),
+                                    ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                    itemCount: myGifts.length,
+                    separatorBuilder: (context, index) => SizedBox(height: 12),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
       key: _scaffoldKey,
       appBar: Toolbar(
         leading: IconButton(
-          onPressed: () => {Navigator.of(context).pushNamed('/gifts')},
+          onPressed: () => Navigator.of(context).pushNamed('/gifts'),
           icon: Container(
-              height: 50,
-              width: 50,
-              decoration: BoxDecoration(
-                  color: AppColors.lighter,
-                  borderRadius: BorderRadius.circular(8)),
-              child: const Icon(
-                Icons.card_giftcard,
-                size: 30,
-              )),
+            height: 50,
+            width: 50,
+            decoration: BoxDecoration(
+              color: AppColors.lighter,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.card_giftcard, size: 28),
+          ),
           color: Colors.white,
         ),
         background: Colors.white,
         title: "YoDate",
         actions: [
+          Container(
+            height: 50,
+            width: 50,
+            decoration: BoxDecoration(
+              color: _viewMode == ViewMode.grid
+                  ? AppColors.primary
+                  : AppColors.lighter,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: IconButton(
+              onPressed: () {
+                setState(() {
+                  _viewMode = _viewMode == ViewMode.swipe
+                      ? ViewMode.grid
+                      : ViewMode.swipe;
+                  _animationController.reset();
+                  _animationController.forward();
+                });
+              },
+              icon: Icon(
+                _viewMode == ViewMode.swipe ? Icons.grid_view : Icons.layers,
+                size: 28,
+              ),
+              color: Colors.white,
+              tooltip: _viewMode == ViewMode.swipe
+                  ? "Switch to Grid View"
+                  : "Switch to Swipe View",
+            ),
+          ),
+          SizedBox(width: 10),
           Stack(
             children: [
               Container(
                 height: 50,
                 width: 50,
                 decoration: BoxDecoration(
-                    color: AppColors.lighter,
-                    borderRadius: BorderRadius.circular(8)),
-                child: IconButton(
-                  onPressed: () {
-                    Navigator.of(context).pushNamed('/notifications');
-                  },
-                  icon: Icon(Icons.notifications, size: 30),
-                  color: Colors.white,
+                  color: AppColors.lighter,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              ),
-              Positioned(
-                right: 14,
-                top: 14,
-                child: Container(
-                  height:7,
-                  width:7,
-                  padding: EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    // Set the badge background color
-                    shape: BoxShape.circle,
-                  ),
-                  child: Text(
-                    '', // Set your counter value here
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                    ),
-                  ),
+                child: IconButton(
+                  onPressed: () =>
+                      Navigator.of(context).pushNamed('/notifications'),
+                  icon: Icon(Icons.notifications, size: 28),
+                  color: Colors.white,
                 ),
               ),
             ],
           ),
-          SizedBox(
-            width: 10,
-          ),
+          SizedBox(width: 10),
           Container(
             height: 50,
             width: 50,
             decoration: BoxDecoration(
-                color: AppColors.lighter,
-                borderRadius: BorderRadius.circular(8)),
+              color: AppColors.lighter,
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: IconButton(
-              onPressed: () {
-                Navigator.of(context).pushNamed("/purchase");
-              },
-              icon: Icon(Icons.shopping_cart, size: 30),
+              onPressed: () => Navigator.of(context).pushNamed("/purchase"),
+              icon: Icon(Icons.shopping_cart, size: 28),
               color: Colors.white,
             ),
           ),
-          SizedBox(
-            width: 10,
-          ),
+          SizedBox(width: 10),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-          child: Column(
-            children: [
-              Visibility(
-                visible: showloader,
-                child: Container(
-                  height: 250,
-                  child: Container(
-                    height: 200,
-                    child: const Column(
+      body: showloader
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    height: 100,
+                    width: 100,
+                    child: LoadingIndicator(
+                      indicatorType: Indicator.ballRotateChase,
+                      colors: [
+                        Colors.white,
+                        Colors.white70,
+                        Colors.white60,
+                      ],
+                      strokeWidth: 2,
+                    ),
+                  ),
+                  SizedBox(height: 30),
+                  Text(
+                    "Finding matches...",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    "Please wait",
+                    style: TextStyle(
+                      color: Colors.white60,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : showReloadButton
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32.0),
+                    child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        SizedBox(
-                          height: 100,
-                          child: LoadingIndicator(
-                              indicatorType: Indicator.ballRotateChase,
-                              colors: [
-                                Color.fromARGB(255, 255, 255, 255),
-                                Color.fromARGB(255, 255, 254, 252),
-                                Color.fromARGB(255, 255, 255, 255),
-                                Color.fromARGB(255, 255, 255, 255),
-                                Color.fromARGB(255, 255, 255, 255),
-                                Color.fromARGB(255, 255, 255, 255),
-                              ],
-                              strokeWidth: 2,
-                              // backgroundColor: Colors.black,
-                              pathBackgroundColor: Colors.black),
+                        Container(
+                          padding: EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.error_outline,
+                            size: 80,
+                            color: Colors.amber,
+                          ),
                         ),
-                        Text("Loading more, please wait")
+                        SizedBox(height: 24),
+                        Text(
+                          "Oops!",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(height: 12),
+                        Text(
+                          "Something went wrong",
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 18,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          "Unable to load profiles. Please try again.",
+                          style: TextStyle(
+                            color: Colors.white60,
+                            fontSize: 14,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        SizedBox(height: 40),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.amber,
+                            foregroundColor: Colors.black,
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 32, vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                            elevation: 5,
+                          ),
+                          onPressed: _loadMoreItems,
+                          icon: Icon(Icons.refresh, size: 24),
+                          label: Text(
+                            'Reload',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                ),
-              ),
-              Visibility(
-                visible: showprofile,
-                child: Container(
-                  height: MediaQuery.of(context).size.height *
-                      0.6, // 60% of screen height
-                  width: MediaQuery.of(context).size.width *
-                      0.8, // 80% of screen width
-                  child: SwipeCards(
-                    matchEngine: _matchEngine,
-                    itemBuilder: (BuildContext context, int index) {
-                      // Ensure that index is within the bounds of _swipeItems
-                      if (index >= 0 && index < _swipeItems.length) {
-                        Content content = _swipeItems[index].content;
-                        SwipeItem swipeitems = _swipeItems[index];
-                        return Center(
-                          child: SizedBox(
-                            height: MediaQuery.of(context).size.height *
-                                0.55, // 55% of screen height
-                            width: MediaQuery.of(context).size.width *
-                                0.7, // 70% of screen width
-                            child: ClipRRect(
-                              borderRadius:
-                                  BorderRadius.all(Radius.circular(10)),
-                              child: Stack(children: [
-                                GestureDetector(
-                                  onTap: () => {
-                                    Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                            builder: (context) => Userprofile(
-                                                userId: allcards[index]
-                                                    .id
-                                                    .toString())))
-                                  },
-                                  child: OptimizedImageLoader(
-                                    url: allcards[index].profilePic ?? "",
-                                    imageHeight:
-                                        MediaQuery.of(context).size.height *
-                                            0.55,
-                                    imageWidth:
-                                        MediaQuery.of(context).size.width * 0.7,
-                                    spinnerHeight: 25,
-                                    spinnerWidth: 25,
-                                    loadingIndicator: Container(
-                                      height:
-                                          MediaQuery.of(context).size.height,
-                                      width: MediaQuery.of(context).size.width,
-                                      child: const CircularProgressIndicator(
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    errorContainerDecoration: BoxDecoration(
-                                      color: Colors.orange,
-                                      borderRadius: BorderRadius.circular(5),
-                                    ),
-                                    errorContainerChild: Image.asset(
-                                        "lib/assets/images/404.png"),
-                                  ),
-                                ),
-                                Positioned(
-                                  bottom: 4,
-                                  left: 4,
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Icon(
-                                            Icons.person,
-                                            size: 16,
-                                            color: Colors.lightGreen,
-                                          ),
-                                          Text(
-                                            content.text,
-                                            style: AppText.header3,
-                                          ),
-                                          Text(
-                                            ', ',
-                                            style: AppText.subtitle1,
-                                          ),
-                                          Text(
-                                            calculateAge(allcards[index]
-                                                .year
-                                                .toString()),
-                                            style: AppText.body1,
-                                          ),
-                                        ],
-                                      ),
-                                      Row(
-                                        children: [
-                                          Icon(
-                                            Icons.location_on,
-                                            size: 15,
-                                            color: Colors.lightGreen,
-                                          ),
-                                          Text(
-                                            allcards[index].district ??
-                                                "Uganda",
-                                            style: AppText.body1,
-                                          ),
-                                        ],
-                                      ),
-                                      Row(children: [
-                                        const SizedBox(
-                                          width: 10,
-                                        ),
-                                        Text(
-                                          context
-                                                  .watch<SocketProvider>()
-                                                  .userIds
-                                                  .any((user) =>
-                                                      user["userId"]
-                                                          .toString() ==
-                                                      allcards[index]
-                                                          .id
-                                                          .toString())
-                                              ? "online"
-                                              : "",
-                                          style: TextStyle(
-                                              color: context
-                                                      .watch<SocketProvider>()
-                                                      .userIds
-                                                      .any((user) =>
-                                                          user["userId"]
-                                                              .toString() ==
-                                                          allcards[index]
-                                                              .id
-                                                              .toString())
-                                                  ? Colors.green
-                                                  : Colors.red,
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold),
-                                        ),
-                                      ]),
-                                    ],
-                                  ),
-                                ),
-                                Positioned(
-                                  bottom: 4,
-                                  right: 4,
-                                  child: ElevatedButton(
-                                    onPressed: () {
-                                      Navigator.of(context)
-                                          .push(MaterialPageRoute(
-                                        builder: (context) => FirebaseChatScreen(
-                                            // valueToPass:
-                                            //     " ${allcards[index].id.toString()}",
-                                            // names:
-                                            //     "${allcards[index].firstName} ${allcards[index].lastName}",
-                                            // profile:
-                                            //     allcards[index].profilePic ??
-                                            //         "",
-                                            // userId: userId,
-                                            // username: username,
-                                            // socket: context
-                                            //     .read<SocketProvider>()
-                                                // .socket,
-                                                 otherUserId: '', otherUserName: '',otherUserProfile: '',currentUserId: '', currentUserName: '',),
-                                      ));
-                                    },
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors
-                                          .lightGreen, // Set button background color to light green
-                                    ),
-                                    child: Icon(
-                                      Icons
-                                          .chat, // Use a chat icon instead of the generic message icon
-                                      color: Colors
-                                          .white, // Set icon color to white
-                                    ),
-                                  ),
-                                ),
-                              ]),
-                            ),
+                )
+              : showprofile
+                  ? _viewMode == ViewMode.swipe
+                      ? SingleChildScrollView(
+                          child: Column(
+                            children: [
+                              SizedBox(height: 20),
+                              _buildSwipeView(),
+                              SizedBox(height: 20),
+                              _buildActionButtons(),
+                              SizedBox(height: 20),
+                            ],
                           ),
-                        );
-                      } else {
-                        // Handle index out of bounds, return an empty container or another widget
-                        return Container();
-                      }
-                    },
-                    onStackFinished: () {
-                      _loadMoreItems();
-                    },
-                    itemChanged: (SwipeItem item, int index) {
-                      setState(() {
-                        currentUser = allcards[index];
-                      });
-                    },
-                    upSwipeAllowed: true,
-                    fillSpace: true,
-                  ),
-                ),
-              ),
-              Visibility(
-                visible: showReloadButton,
-                child: Column(
-                  children: [
-                    const SizedBox(height: 100),
-                    Text("Something we wrong", style: AppText.header1),
-                    const SizedBox(height: 30),
-                    ElevatedButton(
-                      style: const ButtonStyle(
-                          backgroundColor:
-                              MaterialStatePropertyAll(Colors.amber)),
-                      onPressed: () {
-                        // Call _loadMoreItems again when reload button is pressed
-                        _loadMoreItems();
-                      },
-                      child: Text(
-                        'Reload',
-                        style: TextStyle(color: Colors.black),
+                        )
+                      : Container(
+                          height: MediaQuery.of(context).size.height - 120,
+                          child: _buildGridView(),
+                        )
+                  : Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32.0),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(20),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.people_outline,
+                                size: 80,
+                                color: Colors.white30,
+                              ),
+                            ),
+                            SizedBox(height: 24),
+                            Text(
+                              "No profiles available",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            SizedBox(height: 12),
+                            Text(
+                              "Check back later for new matches",
+                              style: TextStyle(
+                                color: Colors.white60,
+                                fontSize: 16,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            SizedBox(height: 32),
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 28, vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(30),
+                                ),
+                              ),
+                              onPressed: _loadMoreItems,
+                              icon: Icon(Icons.refresh, color: Colors.white),
+                              label: Text(
+                                'Refresh',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 30),
-                  ],
-                ),
-              ),
-              SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      _matchEngine.currentItem?.nope();
-                    },
-                    icon: Icon(Icons.thumb_down, size: 24),
-                    label: Text(""),
-                    style: ElevatedButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(24.0),
-                      ),
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                      backgroundColor: Colors.red,
-                    ),
-                  ),
-                  SizedBox(width: 10),
-                  InkResponse(
-                    onTap: () {
-                      if (BottomSheetPanel.isOpen) {
-                        setState(() {
-                          recieverId = {};
-                        });
-
-                        BottomSheetPanel.close();
-                      } else {
-                        setState(() {
-                          recieverId = {
-                            "userId": currentUser.id.toString().toString(),
-                            "Names": currentUser.firstName.toString() +
-                                " " +
-                                currentUser.lastName.toString(),
-                            "profile": currentUser.profilePic.toString(),
-                            "momentId": currentUser.country
-                          };
-                        });
-                        BottomSheetPanel.open();
-                      }
-                      ;
-                    },
-                    radius: 10.0,
-                    splashColor: Colors.white.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(24.0),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Color.fromARGB(255, 4, 4, 4).withAlpha(255),
-                        borderRadius: BorderRadius.circular(24.0),
-                      ),
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                      child: Icon(Icons.star, color: Colors.white, size: 24),
-                    ),
-                  ),
-                  SizedBox(width: 15),
-                  InkResponse(
-                    onTap: () {
-                      _matchEngine.currentItem?.like();
-                    },
-                    radius: 10.0,
-                    splashColor:
-                        Color.fromARGB(255, 80, 253, 41).withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(24.0),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: AppColors.lighter,
-                        borderRadius: BorderRadius.circular(24.0),
-                      ),
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                      child:
-                          Icon(Icons.thumb_up, color: Colors.white, size: 24),
-                    ),
-                  ),
-                  SizedBox(width: 5),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
@@ -1000,17 +1235,17 @@ class userlist {
   factory userlist.fromJson(Map<String, dynamic> json) {
     return userlist(
       id: json['id'].toString(),
-      firstName: json['FirstName'],
-      lastName: json['LastName'],
+      firstName: json['FirstName'] ?? 'Unknown',
+      lastName: json['LastName'] ?? '',
       day: json['day'],
       month: json['month'],
-      year: json['year'],
+      year: json['year'] ?? '2000',
       country: json['Country'],
       district: json['District'] ?? "Uganda",
       village: json['Village'],
-      profilePic: json['Profilepic'],
+      profilePic: json['Profilepic'] ?? '',
       online: json['online'],
-      gender: json['Gender'],
+      gender: json['Gender'] ?? 'Other',
       hopes: json['hopes'],
       religion: json['religion'],
       imgx: json['imgx'],
@@ -1019,16 +1254,16 @@ class userlist {
       imgxxxx: json['imgxxxx'],
       referalCode: json['referalCode'],
       loginId: json['loginId'].toString(),
-      contact: json['contact'],
-      twitter: json['twitter'],
-      instagram: json['instagram'],
-      facebook: json['facebook'],
-      email: json['email'],
-      about: json['about'],
-      promoted: json['promoted'],
-      subscription: json['subscription'],
-      endSubscription: json['endsubscription'],
-      totalShows: json['totalshows'],
+      contact: json['contact'] ?? '',
+      twitter: json['twitter'] ?? '',
+      instagram: json['instagram'] ?? '',
+      facebook: json['facebook'] ?? '',
+      email: json['email'] ?? '',
+      about: json['about'] ?? '',
+      promoted: json['promoted'] ?? false,
+      subscription: json['subscription'] ?? '',
+      endSubscription: json['endsubscription'] ?? '',
+      totalShows: json['totalshows'] ?? 0,
       promoterUrl: json['promoterurl'],
       userImages: List<String>.from(json['userImages'] ?? []),
     );

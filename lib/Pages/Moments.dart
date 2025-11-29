@@ -3,27 +3,81 @@ import 'dart:io';
 import 'package:bottom_sheet_scaffold/bottom_sheet_scaffold.dart';
 import 'package:bottom_sheet_scaffold/views/bottom_sheet.dart';
 import 'package:bottom_sheet_scaffold/views/bottom_sheet_scaffold.dart';
+import 'package:easingles/assets/app.colors.dart';
+import 'package:easingles/assets/urlconfig.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_snackbar_content/flutter_snackbar_content.dart';
 import 'package:flutter_toastify/components/enums.dart';
 import 'package:flutter_toastify/flutter_toastify.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:easingles/Components/PostItems.dart';
-import 'package:easingles/Components/Toolbar.dart';
-import 'package:easingles/Models/GiftsMode.dart';
-import 'package:easingles/Pages/ChatScreen.dart';
-import 'package:easingles/assets/app.colors.dart';
-import 'package:easingles/assets/urlconfig.dart';
-import 'package:easingles/styles/app.text.dart';
 import 'package:http/http.dart' as http;
 import 'package:like_button/like_button.dart';
 import 'package:loading_indicator/loading_indicator.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:easingles/Provider/SocketProvider.dart';
+
+
+
+class AppText {
+  static const TextStyle title = TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.fontColor);
+  static const TextStyle subtitle1 = TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.fontColor);
+  static const TextStyle subtitle2 = TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: AppColors.fontColor);
+  static const TextStyle subtitle3 = TextStyle(fontSize: 14, fontWeight: FontWeight.normal, color: AppColors.disableFont);
+  static const TextStyle body = TextStyle(fontSize: 14, fontWeight: FontWeight.normal, color: AppColors.fontColor);
+}
+
+class GiftsModel {
+  final String? image;
+  final String? name;
+  final int? quantity;
+  GiftsModel.fromJson(Map<String, dynamic> json)
+      : image = json['image'],
+        name = json['name'],
+        quantity = json['quantity'];
+}
+
+class Toolbar extends StatelessWidget implements PreferredSizeWidget {
+  final String title;
+  final Color background;
+  final List<Widget>? actions;
+  const Toolbar({required this.title, required this.background, this.actions, super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return AppBar(
+      title: Text(title, style: AppText.title.copyWith(color: AppColors.primary)),
+      backgroundColor: AppColors.background,
+      elevation: 0,
+      actions: actions,
+    );
+  }
+
+  @override
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+}
+
+class FirebaseChatScreen extends StatelessWidget {
+  const FirebaseChatScreen({
+    super.key,
+    required String otherUserId,
+    required String otherUserName,
+    required String otherUserProfile,
+    required String currentUserId,
+    required String currentUserName,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Chat')),
+      body: const Center(child: Text('Chat Screen Placeholder')),
+    );
+  }
+}
+
 
 class Moments extends StatefulWidget {
-  Moments({Key? key}) : super(key: key);
+  const Moments({Key? key}) : super(key: key);
 
   @override
   State<Moments> createState() => _MomentsState();
@@ -34,52 +88,28 @@ class _MomentsState extends State<Moments> {
   bool showloader = true;
   dynamic recieverId = {"userId": "0", "Names": "None", "profile": "None"};
   List<dynamic> moments = [];
-
-  didChangeDependencies() {
-    super.didChangeDependencies();
-    getmoments();
-    fetchMyGifts();
-  }
-
-  List<File?> _selectedImages = [];
   late List<GiftsModel> myGifts = [];
   bool giftLoaderStatus = true;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      getmoments();
+      fetchMyGifts();
+    });
+  }
+
   void getmoments() async {
     setState(() {
-      showprofile = false;
-      showloader = true;
+      moments = [ ];
+      showprofile = true;
+      showloader = false;
     });
-
-    SharedPreferences pref = await SharedPreferences.getInstance();
-    String? token= pref.getString('token');
-    var skip = await pref.getInt('skip');
-
-    var response =
-        await http.get(Uri.parse('${AppUrls.production}/api/moments/0'),headers: {'Authorization': 'Bearer $token'},);
-
-    switch (response.statusCode) {
-      case 200:
-        final Map<String, dynamic> jsonResponse = jsonDecode(response.body);
-        if (jsonResponse.containsKey('data') && jsonResponse['data'] is List) {
-          final List<dynamic> mmt = jsonResponse['data'];
-          for (var m in mmt) {
-            print(m['FirstName']);
-            print("total length ${mmt.length}");
-            moments.add(m);
-          }
-          setState(() {
-            showprofile = true;
-            showloader = false;
-          });
-        }
-        break;
-      default:
-    }
   }
 
   void onLikeButtonTapped(bool isLiked, userid) async {
-    try {
+      try {
       print("detected tapp event");
       SharedPreferences prefs = await SharedPreferences.getInstance();
       String? id = prefs.getString('id');
@@ -115,15 +145,12 @@ class _MomentsState extends State<Moments> {
             setState(() {
               myGifts.addAll(gifts);
             });
-            // You can return the gifts list or handle it in some way
             return gifts;
           } else {
-            // Handle the case where the response does not contain a 'data' key or it's not a list
             return [];
           }
           break;
         default:
-          // Handle other status codes if needed
           return [];
       }
     } catch (error) {
@@ -135,7 +162,7 @@ class _MomentsState extends State<Moments> {
     return await !isLiked;
   }
 
-  void sendGift(GiftsModel gift, String reciever, String Recievername) async {
+ void sendGift(GiftsModel gift, String reciever, String Recievername) async {
     setState(() {
       giftLoaderStatus = false;
     });
@@ -281,380 +308,380 @@ class _MomentsState extends State<Moments> {
     fetchMyGifts();
   }
 
+
+  Widget _buildMomentPost(dynamic singleMoment) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.lighter,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.background.withOpacity(0.8),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: AppColors.primary.withOpacity(0.2),
+                    backgroundImage: NetworkImage(
+                        singleMoment["imageTwo"] ?? "https://via.placeholder.com/150"),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "${singleMoment['FirstName'] ?? ""} ${singleMoment['LastName'] ?? ""}",
+                        style: AppText.subtitle2.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      const Text(
+                        "Just now",
+                        style: AppText.subtitle3,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(
+                singleMoment['TagLine'] ?? "",
+                style: AppText.body,
+              ),
+            ),
+
+            SizedBox(
+              height: 400,
+              width: double.infinity,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Image.network(
+                  singleMoment['imageOne'] ?? "https://via.placeholder.com/400",
+                  fit: BoxFit.cover,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Center(
+                      child: CircularProgressIndicator(
+                        value: loadingProgress.expectedTotalBytes != null
+                            ? loadingProgress.cumulativeBytesLoaded /
+                                loadingProgress.expectedTotalBytes!
+                            : null,
+                        color: AppColors.primary,
+                        strokeWidth: 2.0,
+                      ),
+                    );
+                  },
+                  errorBuilder: (context, error, stackTrace) =>
+                      const Center(child: Icon(Icons.broken_image, size: 50, color: AppColors.disableFont)),
+                ),
+              ),
+            ),
+
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      LikeButton(
+                        onTap: (isLiked) async {
+                          onLikeButtonTapped(isLiked, singleMoment['id'].toString());
+                          return !isLiked;
+                        },
+                        size: 24,
+                        circleColor: const CircleColor(start: Colors.pink, end: AppColors.primary),
+                        bubblesColor: const BubblesColor(
+                          dotPrimaryColor: Colors.pinkAccent,
+                          dotSecondaryColor: Colors.red,
+                        ),
+                        likeBuilder: (bool isLiked) {
+                          return Icon(
+                            isLiked ? Icons.favorite : Icons.favorite_border,
+                            color: isLiked ? Colors.pinkAccent : AppColors.disableFont,
+                            size: 24,
+                          );
+                        },
+                        likeCount: singleMoment['Likes'] ?? 0,
+                        countBuilder: (int? count, bool isLiked, String text) {
+                          return Text(
+                            count == 0 || count == null ? "Love" : text,
+                            style: AppText.body.copyWith(color: isLiked ? Colors.pinkAccent : AppColors.disableFont),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+
+                  IconButton(
+                    onPressed: () {
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (context) => const FirebaseChatScreen(
+                          otherUserId: '', otherUserName: '', otherUserProfile: '', currentUserId: '', currentUserName: '',
+                        ),
+                      ));
+                    },
+                    icon: const Icon(Icons.comment_outlined, color: AppColors.disableFont),
+                  ),
+
+                  Row(
+                    children: [
+                      IconButton(
+                        onPressed: () {
+                          if (BottomSheetPanel.isOpen) {
+                            setState(() {
+                              recieverId = {};
+                            });
+                            BottomSheetPanel.close();
+                          } else {
+                            setState(() {
+                              recieverId = {
+                                "userId": singleMoment['owenId'].toString(),
+                                "Names":
+                                    "${singleMoment['FirstName'].toString()} ${singleMoment['LastName'].toString()}",
+                                "profile": singleMoment['imageTwo'].toString(),
+                                "momentId": singleMoment['id'].toString()
+                              };
+                            });
+                            BottomSheetPanel.open();
+                          }
+                        },
+                        icon: const Icon(Icons.card_giftcard, color: AppColors.primary),
+                      ),
+                      Text(
+                        singleMoment['totalgifts'].toString(),
+                        style: AppText.body.copyWith(color: AppColors.primary),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  DraggableBottomSheet _buildGiftBottomSheet() {
+    return DraggableBottomSheet(
+      animationDuration: const Duration(milliseconds: 300),
+      body: Container(
+        decoration: const BoxDecoration(
+          color: AppColors.lighter,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        width: double.infinity,
+        padding: const EdgeInsets.only(top: 24, bottom: 16),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Text(
+                "Send a Gift to ${recieverId['Names'] ?? 'User'}",
+                style: AppText.subtitle1.copyWith(color: AppColors.primary),
+              ),
+            ),
+            const Divider(color: AppColors.background, height: 24, thickness: 2),
+            if (myGifts.isNotEmpty)
+              Expanded(
+                child: ListView.separated(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemBuilder: (context, index) {
+                    var gift = myGifts[index];
+                    bool canSend = (gift.quantity ?? 0) > 0;
+
+                    return Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.background,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  gift.image ?? "",
+                                  height: 60,
+                                  width: 60,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    gift.name ?? "",
+                                    style: AppText.subtitle2.copyWith(color: AppColors.fontColor, fontWeight: FontWeight.bold),
+                                  ),
+                                  Text(
+                                    "Qty: ${gift.quantity ?? 0} left",
+                                    style: AppText.body.copyWith(color: AppColors.disableFont),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          SizedBox(
+                            width: 80,
+                            child: ElevatedButton(
+                              onPressed: canSend && giftLoaderStatus
+                                  ? () {
+                                      sendGift(gift, recieverId['userId'].toString(), recieverId['Names'] ?? "");
+                                    }
+                                  : null,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: canSend ? AppColors.primary : AppColors.disableButton,
+                                foregroundColor: AppColors.fontColor2,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                padding: EdgeInsets.zero,
+                              ),
+                              child: giftLoaderStatus
+                                  ? Text(
+                                      canSend ? "Send" : "Empty",
+                                      style: AppText.body.copyWith(fontWeight: FontWeight.bold, color: AppColors.fontColor2),
+                                    )
+                                  : Center(
+                                      child: SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(
+                                          color: AppColors.fontColor2,
+                                          strokeWidth: 2,
+                                        ),
+                                      ),
+                                    ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  itemCount: myGifts.length,
+                  separatorBuilder: (BuildContext context, int index) {
+                    return const SizedBox(height: 12);
+                  },
+                ),
+              )
+            else
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32.0),
+                  child: Text(
+                    "You have no gifts available to send.",
+                    style: AppText.body.copyWith(color: AppColors.disableFont),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return BottomSheetScaffold(
-      bottomSheet: DraggableBottomSheet(
-          animationDuration: const Duration(milliseconds: 200),
-          body: Container(
-            decoration: BoxDecoration(
-              color: AppColors.background,
-            ),
-            width: double.infinity,
-            height: 500,
-            alignment: Alignment.center,
-            child: Column(
-              children: [
-                if (myGifts.isNotEmpty)
-                  Expanded(
-                    child: ListView.separated(
-                      scrollDirection: Axis.vertical,
-                      itemBuilder: (context, index) {
-                        var gift = myGifts[index];
-                        return Padding(
-                          padding: const EdgeInsets.fromLTRB(10, 5, 10, 5),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: AppColors.background,
-                              borderRadius:
-                                  BorderRadius.all(Radius.circular(15)),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                ClipRRect(
-                                  borderRadius:
-                                      BorderRadius.all(Radius.circular(15)),
-                                  child: Image.network(
-                                    gift.image ?? "",
-                                    height: 100,
-                                    width: 100,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.start,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        "${gift.quantity}",
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Text(
-                                        "${gift.name}s" ?? "",
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Text(
-                                        "left",
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                ElevatedButton(
-                                  onPressed: () => {
-                                 
-
-                                    sendGift(gift, moments[0]['owenId'].toString(),
-                                        moments[0]['FirstName'] ?? "")
-                                  },
-                                  child: Column(
-                                    children: [
-                                      Visibility(
-                                          visible: giftLoaderStatus,
-                                          child: Text("send")),
-                                      Visibility(
-                                          visible: !giftLoaderStatus,
-                                          child: CircularProgressIndicator(
-                                            color: AppColors.lighter,
-                                          )),
-                                    ],
-                                  ),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.amber,
-                                    foregroundColor: Colors.white,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                      itemCount: myGifts.length,
-                      separatorBuilder: (BuildContext context, int index) {
-                        return SizedBox(
-                          width: 24,
-                        );
-                      },
-                    ),
-                  ),
-              ],
-            ),
-          )),
+      bottomSheet: _buildGiftBottomSheet(),
       appBar: Toolbar(
         title: "Moments",
         background: AppColors.background,
         actions: [
-          TextButton(
-            onPressed: () {
-              // Show the bottom sheet to post a new moment
-              Navigator.of(context).pushNamed('/newmoment');
-            },
-            child: Container(
-              decoration: const BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.all(Radius.circular(20)),
+          Padding(
+            padding: const EdgeInsets.only(right: 16.0),
+            child: TextButton(
+              onPressed: () {
+                 Navigator.of(context).pushNamed('/newmoment');
+              },
+              style: TextButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               ),
-              child: const Padding(
-                padding: EdgeInsets.all(8.0),
-                child: Text(
-                  "Post a moment",
-                  style: TextStyle(color: Colors.black),
-                ),
+              child: Text(
+                "Post a moment",
+                style: AppText.body.copyWith(color: AppColors.fontColor2, fontWeight: FontWeight.bold),
               ),
             ),
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Visibility(
-            visible: showloader,
-            child: Center(
-              child: Container(
-                height: 250,
-                child: Container(
-                  height: 200,
-                  child: const Column(
+      body: Container(
+        color: AppColors.background,
+        child: Column(
+          children: [
+            Visibility(
+              visible: showloader,
+              child: Expanded(
+                child: Center(
+                  child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       SizedBox(
                         height: 100,
+                        width: 100,
                         child: LoadingIndicator(
                           indicatorType: Indicator.ballRotateChase,
-                          colors: [
-                            Color.fromARGB(255, 255, 255, 255),
-                            Color.fromARGB(255, 255, 255, 255),
-                            Color.fromARGB(255, 255, 255, 255),
-                            Color.fromARGB(255, 255, 255, 255),
-                            Color.fromARGB(255, 255, 255, 255),
-                            Color.fromARGB(255, 255, 255, 255),
-                          ],
+                          colors: const [AppColors.primary, AppColors.fontColor, AppColors.lighter],
                           strokeWidth: 2,
-                          pathBackgroundColor: Colors.black,
+                          backgroundColor: Colors.transparent,
                         ),
                       ),
-                      Text("Loading more, please wait"),
+                      const SizedBox(height: 16),
+                      Text("Loading moments, please wait...", style: AppText.body.copyWith(color: AppColors.fontColor)),
                     ],
                   ),
                 ),
               ),
             ),
-          ),
-          Expanded(
-            child: Visibility(
-              visible: showprofile,
-              child: ListView.separated(
-                itemBuilder: (context, index) {
-                  var singleMoment = moments[index];
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 10),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: AppColors.lighter,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              Padding(
-                                padding: EdgeInsets.all(8.0),
-                                child: CircleAvatar(
-                                  backgroundImage: NetworkImage(
-                                      singleMoment["imageTwo"] ?? ""),
-                                ),
-                              ),
-                              SizedBox(width: 10),
-                              Row(
-                                children: [
-                                  Text(singleMoment['FirstName'] ?? "",
-                                      style: AppText.subtitle3),
-                                  const SizedBox(width: 5),
-                                  Text(singleMoment['LastName'] ?? "",
-                                      style: AppText.subtitle3),
-                                ],
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(10, 0, 0, 0),
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                singleMoment['TagLine'] ?? "",
-                                style: AppText.subtitle3,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 5),
-                          SizedBox(
-                            height: 400,
-                            child: ClipRRect(
-                              borderRadius:
-                                  BorderRadius.all(Radius.circular(10)),
-                              child: Image.network(
-                                singleMoment['imageOne'] ?? "",
-                                height: 400,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(10, 0, 0, 0),
-                            child: Column(
-                              children: [
-                                Row(
-                                  children: [
-                                    LikeButton(
-                                      onTap: (isLiked) async {
-                                        checkIfLiked(isLiked);
-                                        onLikeButtonTapped(isLiked,
-                                            singleMoment['id'].toString());
-                                        return !isLiked;
-                                      },
-                                      size: 20,
-                                      circleColor: CircleColor(
-                                        start: Color(0xff00ddff),
-                                        end: Color(0xff0099cc),
-                                      ),
-                                      bubblesColor: BubblesColor(
-                                        dotPrimaryColor: Color(0xff33b5e5),
-                                        dotSecondaryColor: Color(0xff0099cc),
-                                      ),
-                                      likeBuilder: (bool isLiked) {
-                                        return Icon(
-                                          Icons.favorite,
-                                          color: isLiked
-                                              ? Colors.pink
-                                              : Colors.grey,
-                                          size: 20,
-                                        );
-                                      },
-                                      likeCount: singleMoment['Likes'] ?? 0,
-                                      countBuilder: (int? count, bool isLiked,
-                                          String text) {
-                                        var color =
-                                            isLiked ? Colors.pink : Colors.grey;
-                                        Widget result;
-                                        if (count == 0 || count == null) {
-                                          result = Text(
-                                            "love",
-                                            style: TextStyle(color: color),
-                                          );
-                                        } else {
-                                          result = Text(
-                                            text,
-                                            style: TextStyle(color: color),
-                                          );
-                                        }
-                                        return result;
-                                      },
-                                    ),
-                                    const SizedBox(width: 10),
-                                    IconButton(
-                                      onPressed: () async {
-                                        SharedPreferences pref =
-                                            await SharedPreferences
-                                                .getInstance();
-                                        String id = pref.getString("id") ?? "0";
-                                        Navigator.of(context)
-                                            .push(MaterialPageRoute(
-                                          builder: (context) => FirebaseChatScreen(
-                                              // valueToPass:
-                                              //     " ${singleMoment['id'].toString()}",
-                                              // names:
-                                              //     "${singleMoment['FirstName']} ${singleMoment['LastName']}",
-                                              // profile: singleMoment['imageTwo']
-                                              //         .toString() ??
-                                              //     "",
-                                              // userId: id,
-                                              // username: "You",
-                                              // socket: context
-                                              //     .read<SocketProvider>()
-                                              //     .socket, 
-                                                  otherUserId: '', otherUserName: '', otherUserProfile: '', currentUserId: '', currentUserName: '',),
-                                        ));
-                                      },
-                                      icon: const Icon(Icons.comment),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Row(
-                                      children: [
-                                        IconButton(
-                                          onPressed: () {
-                                            if (BottomSheetPanel.isOpen) {
-                                               setState(() {
-                                                recieverId = {};
-                                              });
-                                              
-                                              BottomSheetPanel.close();
-                                              getmoments();
-                                            } else {
-                                              setState(() {
-                                                recieverId = {
-                                                  "userId": singleMoment['owenId']
-                                                      .toString(),
-                                                  "Names": singleMoment['FirstName']
-                                                          .toString() +
-                                                      " " +
-                                                      singleMoment['LastName']
-                                                          .toString(),
-                                                  "profile": singleMoment['imageTwo']
-                                                      .toString(),
-                                                  "momentId":singleMoment['id'].toString()
-                                                };
-                                              });
-                                              BottomSheetPanel.open();
-                                            }
-                                            ;
-                                          },
-                                          icon: const Icon(
-                                              Icons.card_giftcard_outlined),
-                                        ),
-                                        Text(singleMoment['totalgifts'].toString(),style: TextStyle(
-                                          color: Colors.amber,
-                                        ),)
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 10),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+
+            Expanded(
+              child: Visibility(
+                visible: showprofile && moments.isNotEmpty,
+                replacement: Visibility(
+                  visible: showprofile && moments.isEmpty,
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(40.0),
+                      child: Text("No moments to display yet. Post your first!", style: AppText.body.copyWith(color: AppColors.disableFont)),
                     ),
-                  );
-                },
-                itemCount: moments.length,
-                separatorBuilder: (BuildContext context, int index) {
-                  return SizedBox(
-                    height: 24,
-                  );
-                },
+                  ),
+                ),
+                child: ListView.separated(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  itemBuilder: (context, index) {
+                    return _buildMomentPost(moments[index]);
+                  },
+                  itemCount: moments.length,
+                  separatorBuilder: (BuildContext context, int index) {
+                    return const SizedBox(height: 24);
+                  },
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

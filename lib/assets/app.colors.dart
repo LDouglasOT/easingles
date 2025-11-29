@@ -10,4 +10,6 @@ class AppColors{
   static const black= Color(0xff0000);
   static const white= Color.fromARGB(0, 255, 255, 255);
   static const lighter=Color.fromARGB(255, 93, 22, 148);
+  static const gradientEnd = Color.fromARGB(255, 60, 25, 85);
 }
+

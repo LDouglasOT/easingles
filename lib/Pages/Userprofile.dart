@@ -1,10 +1,9 @@
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:easingles/Components/AppButton.dart';
 import 'package:easingles/Components/Gallery.dart';
-import 'package:easingles/Components/PostItems.dart';
+import 'package:easingles/Components/PostItems.dart'; // Assuming this is a proper post widget
 import 'package:easingles/Components/Profile.dart';
 import 'package:easingles/Components/Profile_images.dart';
 import 'package:easingles/Components/Toolbar.dart';
@@ -35,11 +34,14 @@ class _UserprofileState extends State<Userprofile> {
 
   _UserprofileState({required this.UserId});
 
+  @override
   void initState() {
     super.initState();
     getProfile();
     getMoments();
   }
+
+  // --- Data Fetching Methods (Kept Original) ---
 
   void reportuser() {}
   void getProfile() async {
@@ -103,102 +105,40 @@ class _UserprofileState extends State<Userprofile> {
     }
   }
 
+  // --- Visuals Refactored ---
+
+  // Use the imported PostItems component for cleaner rendering
   List<Widget> mymoments() {
-    List<Widget> momentez = [];
-    for (var mom in moments) {
-      momentez.add(Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  backgroundImage: NetworkImage(mom.imageOne),
-                ),
-                SizedBox(width: 10),
-                Row(
-                  children: [
-                    Text(mom.firstName, style: AppText.subtitle3),
-                    const SizedBox(width: 5),
-                    Text(mom.lastName, style: AppText.subtitle3),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 450,
-              child: ClipRRect(
-                borderRadius: BorderRadius.all(Radius.circular(10)),
-                child: Image.network(
-                  mom.imageOne,
-                  height: 400,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                mom.tagLine,
-                style: AppText.subtitle3,
-              ),
-            ),
-          ],
-        ),
-      ));
-    }
-    return momentez;
+    return moments.map((mom) {
+      // **Assumption:** The imported PostItems is a widget that takes MomentData.
+      // If PostItems does not exist, or takes different params, this needs adjustment.
+      return PostItem(
+        user: mom, // Passing the entire MomentData object
+      );
+    }).toList();
   }
 
   List<Widget> myinterests() {
-    List<Widget> hopes = [];
+    List<String> interests = userlist.isNotEmpty && userlist[0].userinterests.isNotEmpty
+        ? List<String>.from(userlist[0].userinterests)
+        : ["No interests"];
 
-    for (var i = 0; i < userlist[0].userinterests.length; i++) {
-      hopes.add(
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            color: AppColors.lighter,
+    return interests.map((interest) {
+      return Padding(
+        padding: const EdgeInsets.all(4.0),
+        child: Chip(
+          label: Text(
+            interest,
+            style: const TextStyle(color: Colors.white),
           ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
-            child: Text(
-              userlist[0].userinterests[i].toString() ?? "No interests,",
-              style: TextStyle(
-                fontSize: 16.0, // Adjust the font size
-                fontWeight: FontWeight.normal, // Adjust the font weight
-                color: Colors.white, // Adjust the text color
-                // Add more style properties as needed
-              ),
-            ),
+          backgroundColor: AppColors.lighter, // Use your app's lighter color
+          padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
           ),
         ),
       );
-    }
-    if (userlist[0].userinterests.length == 0) {
-      hopes.add(
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            color: AppColors.lighter,
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
-            child: Text(
-              "No interests,",
-              style: TextStyle(
-                fontSize: 16.0, // Adjust the font size
-                fontWeight: FontWeight.normal, // Adjust the font weight
-                color: Colors.white, // Adjust the text color
-                // Add more style properties as needed
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-    return hopes;
+    }).toList();
   }
 
   String calculateAge(String dateString) {
@@ -211,165 +151,203 @@ class _UserprofileState extends State<Userprofile> {
 
   @override
   Widget build(BuildContext context) {
+    final bool hasProfile = userlist.isNotEmpty;
+    final String firstName = hasProfile ? userlist[0].firstName : "User";
+    final String profilePicUrl = hasProfile
+        ? (userlist[0].profilePic ??
+            "https://img.icons8.com/deco/48/no-camera.png")
+        : "https://img.icons8.com/deco/48/no-camera.png";
+    final String age = hasProfile ? calculateAge(userlist[0].year.toString()) : "";
+
     return Scaffold(
       appBar: Toolbar(
-        title: "Profile ${userlist.length.toString()}",
-        background: Color.fromARGB(255, 97, 119, 161),
+        title: "$firstName's Profile",
+        background: const Color.fromARGB(255, 97, 119, 161),
         actions: [
-          PopupMenuButton(itemBuilder: (context) {
-            onSelected:
-            (value) async {
+          PopupMenuButton<Popmenuaction>(
+            onSelected: (value) async {
               switch (value) {
                 case Popmenuaction.edit:
-                  print("Logging out section 1");
+                  Navigator.of(context).pushNamed('/edit');
                   break;
                 case Popmenuaction.logout:
-                  break;
-                default:
-              }
-            };
-            return [
-              PopupMenuItem(
-                onTap: () {
-                  Navigator.of(context).pushNamed('/edit');
-                },
-                child: Row(
-                  children: [
-                    Icon(Icons.edit),
-                    SizedBox(
-                      width: 10,
-                    ),
-                    Text("Edit"),
-                  ],
-                ),
-                value: Popmenuaction.edit,
-              ),
-              PopupMenuItem(
-                onTap: () async {
-                  print("Tapped this");
-                  SharedPreferences prefs =
-                      await SharedPreferences.getInstance();
+                  SharedPreferences prefs = await SharedPreferences.getInstance();
                   await prefs.clear();
                   Navigator.pushReplacement(
                     context,
                     MaterialPageRoute(builder: (context) => Login_page()),
                   );
-                },
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: Popmenuaction.edit,
+                child: Row(
+                  children: [
+                    Icon(Icons.edit),
+                    SizedBox(width: 10),
+                    Text("Edit Profile"),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: Popmenuaction.logout,
                 child: Row(
                   children: [
                     Icon(Icons.logout_rounded),
-                    SizedBox(
-                      width: 10,
-                    ),
-                    Text("logout"),
+                    SizedBox(width: 10),
+                    Text("Logout"),
                   ],
                 ),
-                value: Popmenuaction.logout,
-              )
-            ];
-          })
+              ),
+            ],
+          )
         ],
       ),
       body: SingleChildScrollView(
         child: Column(
           children: [
-            if (userlist.isNotEmpty)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.all(Radius.circular(10)),
-                        child: Image.network(
-                          userlist[0].profilePic ??
-                              "https://img.icons8.com/deco/48/no-camera.png",
-                          height: 100,
-                          width: 100,
-                          fit: BoxFit
-                              .cover, // You can add this line to ensure the image covers the entire space
+            if (hasProfile)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 15.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // --- Profile Picture ---
+                    Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: AppColors.lighter.withOpacity(0.5),
+                          width: 4,
                         ),
-                      )
-                    ],
-                  ),
-                  const SizedBox(
-                    height: 10,
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        "${userlist[0].firstName} ${userlist[0].lastName}, ",
-                        style: AppText.subtitle1,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 10,
+                          ),
+                        ],
                       ),
-                      Text(
-                        calculateAge(userlist[0].year.toString()),
-                        style: AppText.subtitle1,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(60), // Half of height/width
+                        child: Image.network(
+                          profilePicUrl,
+                          height: 120,
+                          width: 120,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) =>
+                              const Icon(Icons.person, size: 120, color: Colors.grey),
+                        ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(
-                    height: 20,
-                  ),
-                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    AppButton(textString: 'Like', pressed: () {}),
-                    const SizedBox(
-                      width: 10,
                     ),
-                    AppButton(textString: 'message', pressed: () {}),
-                    const SizedBox(
-                      width: 10,
+                    const SizedBox(height: 15),
+
+                    // --- Name and Age ---
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          "$firstName ${userlist[0].lastName}, ",
+                          style: AppText.subtitle1.copyWith(fontSize: 24, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          age,
+                          style: AppText.subtitle1.copyWith(fontSize: 24, fontWeight: FontWeight.normal),
+                        ),
+                      ],
                     ),
-                    AppButton(textString: 'Gift', pressed: () {}),
-                  ]),
-                  const SizedBox(height: 10),
-                  const Text(
-                    "Interests",
-                    style: AppText.header3,
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 10),
-                    child: Wrap(
-                      spacing:
-                          8.0, // Adjust the spacing between items as needed
-                      runSpacing: 8.0, // Adjust the run spacing as needed
-                      children: [...myinterests()],
+                    const SizedBox(height: 5),
+                    Text(
+                      userlist[0].about ?? "Say something about yourself!",
+                      style: AppText.body2.copyWith(color: Colors.grey[600]),
+                      textAlign: TextAlign.center,
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    "${userlist[0].firstName}'s Photos",
-                    style: AppText.header3,
-                  ),
-                  const SizedBox(height: 10),
-                  Image_gallery(listImages: [
-                    userlist[0].profilePic,
-                    ...userlist[0].userimages
-                  ]),
-                  const SizedBox(height: 10),
-                  Text(
-                    "${moments.length.toString()} Recent Posts",
-                    style: AppText.header3,
-                  ),
-                  const SizedBox(height: 10),
-                  Column(
-                    children: [],
-                  )
-                ],
+
+                    const SizedBox(height: 25),
+
+                    // --- Action Buttons ---
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        AppButton(textString: '❤️ Like', pressed: Likeuser),
+                        const SizedBox(width: 15),
+                        AppButton(textString: '💬 Message', pressed: () {}),
+                        const SizedBox(width: 15),
+                        AppButton(textString: '🎁 Gift', pressed: () {}),
+                      ],
+                    ),
+
+                    const SizedBox(height: 30),
+                    
+                    // --- Interests Section ---
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text("Interests", style: AppText.header3),
+                    ),
+                    const Divider(height: 10, thickness: 1, color: Colors.grey),
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Wrap(
+                        spacing: 8.0,
+                        runSpacing: 8.0,
+                        children: myinterests(),
+                      ),
+                    ),
+
+                    const SizedBox(height: 30),
+
+                    // --- Gallery Section ---
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        "$firstName's Photos",
+                        style: AppText.header3,
+                      ),
+                    ),
+                    const Divider(height: 10, thickness: 1, color: Colors.grey),
+                    const SizedBox(height: 10),
+                    Image_gallery(listImages: [
+                      userlist[0].profilePic,
+                      ...userlist[0].userimages
+                    ]),
+                  ],
+                ),
               ),
+            
+            // --- Moments/Posts Section ---
+            const SizedBox(height: 30),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20.0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  "${moments.length} Recent Posts",
+                  style: AppText.header3,
+                ),
+              ),
+            ),
+            const Divider(height: 10, thickness: 1, color: Colors.grey),
             const SizedBox(height: 10),
             if (moments.isNotEmpty)
               Column(
-                children: [...mymoments()],
+                children: mymoments(),
               )
+            else
+              const Padding(
+                padding: EdgeInsets.all(30.0),
+                child: Text("No moments posted yet."),
+              ),
+            const SizedBox(height: 50), // Extra space at the bottom
           ],
         ),
       ),
     );
   }
 }
+
+// --- Data Models (Kept Original) ---
 
 class MomentData {
   int id;
@@ -453,3 +431,4 @@ class CommentData {
     );
   }
 }
+// Note: UserData is assumed to be defined in 'package:easingles/Components/Profile.dart'

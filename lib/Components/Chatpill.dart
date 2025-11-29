@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:easingles/Pages/ChatScreen.dart';
-import 'package:easingles/Provider/SocketProvider.dart';
+import 'package:easingles/Provider/FirebaseChatProvider.dart';
 import 'package:easingles/assets/app.colors.dart';
 import 'package:easingles/styles/app.text.dart';
 import 'package:loading_indicator/loading_indicator.dart';
@@ -31,20 +31,18 @@ class Chatpill extends StatelessWidget {
       child: GestureDetector(
         onTap: () async {
           SharedPreferences pref = await SharedPreferences.getInstance();
-          String? id = pref.getString("id") ?? "0";
+          String? currentUserId = pref.getString("id") ?? "0";
+          String? currentUserName = pref.getString("name") ?? "You";
 
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => FirebaseChatScreen(
-                // valueToPass: cuid,
-                // names: names,
-                // profile: avatar,
-                // userId: id,
-                // username: "You",
-                // socket:context.read<SocketProvider>().socket,
-                
-                 otherUserId: '', otherUserName: '', otherUserProfile: '', currentUserId: '', currentUserName: '',
+                otherUserId: cuid,
+                otherUserName: names,
+                otherUserProfile: avatar,
+                currentUserId: currentUserId,
+                currentUserName: currentUserName,
               ),
             ),
           );
@@ -138,8 +136,7 @@ class Chatpill extends StatelessWidget {
                       Padding(
                         padding: const EdgeInsets.fromLTRB(0, 0, 15, 4),
                         child: Text(
-                          context.watch<SocketProvider>().userIds.any(
-                                  (user) => user["userId"].toString() == cuid)
+                          context.watch<FirebaseChatProvider>().onlineUserIds.contains(cuid)
                               ? "online"
                               : "offline",
                           style: TextStyle(color: Colors.white),
