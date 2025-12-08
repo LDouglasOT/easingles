@@ -1,6 +1,6 @@
+import 'package:easingles/Pages/Moments.dart';
 import 'package:flutter/material.dart';
 import 'package:easingles/Pages/ChatScreen.dart';
-import 'package:easingles/Provider/FirebaseChatProvider.dart';
 import 'package:easingles/assets/app.colors.dart';
 import 'package:easingles/styles/app.text.dart';
 import 'package:loading_indicator/loading_indicator.dart';
@@ -133,15 +133,15 @@ class Chatpill extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(0, 0, 15, 4),
-                        child: Text(
-                          context.watch<FirebaseChatProvider>().onlineUserIds.contains(cuid)
-                              ? "online"
-                              : "offline",
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
+                      // Padding(
+                      //   padding: const EdgeInsets.fromLTRB(0, 0, 15, 4),
+                      //   child: Text(
+                      //     context.watch<FirebaseChatProvider>().onlineUserIds.contains(cuid)
+                      //         ? "online"
+                      //         : "offline",
+                      //     style: TextStyle(color: Colors.white),
+                      //   ),
+                      // ),
                       Padding(
                         padding: const EdgeInsets.fromLTRB(0, 0, 20, 0),
                         child: Container(

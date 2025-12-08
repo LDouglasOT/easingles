@@ -7,6 +7,7 @@ import 'package:easingles/Provider/LoginProvider.dart';
 import 'package:easingles/assets/app.colors.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class Login_page extends StatefulWidget {
@@ -21,23 +22,36 @@ class _Login_pageState extends State<Login_page> {
   bool _isRegisterLoading = false;
   bool _isGoogleLoading = false;
   
-  // Authentication method selector
-  String _authMethod = 'phone'; // 'phone', 'email'
+  String _authMethod = 'phone';
+  
+  String _selectedCountryCode = '+256';
   
   final GoogleSignIn signIn = GoogleSignIn.instance;
   
-  // Controllers for phone authentication
   final _phonecontroller = TextEditingController();
   final _phonePasswordController = TextEditingController();
   
-  // Controllers for email authentication
   final _emailController = TextEditingController();
   final _emailPasswordController = TextEditingController();
+
+  final List<Map<String, String>> _countryCodes = [
+    {'code': '+256', 'country': 'Uganda', 'flag': '🇺🇬'},
+    {'code': '+254', 'country': 'Kenya', 'flag': '🇰🇪'},
+    {'code': '+255', 'country': 'Tanzania', 'flag': '🇹🇿'},
+    {'code': '+250', 'country': 'Rwanda', 'flag': '🇷🇼'},
+    {'code': '+1', 'country': 'USA/Canada', 'flag': '🇺🇸'},
+    {'code': '+44', 'country': 'UK', 'flag': '🇬🇧'},
+    {'code': '+91', 'country': 'India', 'flag': '🇮🇳'},
+    {'code': '+86', 'country': 'China', 'flag': '🇨🇳'},
+    {'code': '+234', 'country': 'Nigeria', 'flag': '🇳🇬'},
+    {'code': '+27', 'country': 'South Africa', 'flag': '🇿🇦'},
+  ];
 
   void initState() {
     super.initState();
     check();
   }
+  
   void check()async{
     print('Api call made');
     final response = await http.get(
@@ -46,7 +60,6 @@ class _Login_pageState extends State<Login_page> {
       );
       print('api call failed finally');
   }
-
 
   @override
   void dispose() {
@@ -62,8 +75,8 @@ class _Login_pageState extends State<Login_page> {
     if (text.isEmpty) {
       return null;
     }
-    if (text.length < 10) {
-      return 'Ten digits eg.07821.....';
+    if (text.length < 9) {
+      return 'Phone number too short';
     }
     if (text.length > 10) {
       return 'Number too long';
@@ -76,7 +89,6 @@ class _Login_pageState extends State<Login_page> {
     if (text.isEmpty) {
       return null;
     }
-    // Basic email validation
     final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
     if (!emailRegex.hasMatch(text)) {
       return 'Enter a valid email address';
@@ -84,39 +96,74 @@ class _Login_pageState extends State<Login_page> {
     return null;
   }
 
-  Future<void> _handleGoogleSignIn() async {
-    setState(() {
-      _isGoogleLoading = true;
-    });
 
-    try {
-      signIn.initialize(
-        clientId: 'clientId', 
-        serverClientId: 'serverClientId'
-      ).then((
-        _,
-      ) {
-        signIn.authenticationEvents
-            .listen((GoogleSignInAuthenticationEvent event) {
-           
-              print('Google Sign-In Event: $event');
-            }, onError: (Object error) {
-              print('Google Sign-In Stream Error: $error');
-            });
 
-        signIn.attemptLightweightAuthentication();
-      });
-    } catch (error) {
-      print('Google Sign-In Error: $error');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Google Sign-In failed: $error')),
-      );
-    } finally {
-      setState(() {
-        _isGoogleLoading = false;
-      });
+
+
+Future<void> _handleGoogleSignIn() async {
+  setState(() {
+    _isGoogleLoading = true;
+  });
+
+  try {
+    signIn.initialize();
+   signIn.initialize(
+    serverClientId:'1048511336383-oc57lcet02qh49kn751r5g8vu8hn74bs.apps.googleusercontent.com',
+    
+   );
+    final GoogleSignInAccount? googleUser = await signIn.authenticate();
+
+    if (googleUser == null) {
+      return; 
     }
+    print('.........................................');
+    print('.........................................');
+    print('.........................................');
+    print('.........................................');
+    print('.........................................');
+    print('.........................................');
+    print('.........................................');
+    print(googleUser.toString());
+    print(googleUser.email);
+    print(googleUser.displayName);
+    print(googleUser.id);
+    print(googleUser.photoUrl);
+    print(googleUser.authentication);
+    print(googleUser.authorizationClient);
+
+    print('.........................................');
+    print('.........................................');
+    print('.........................................');
+    print('.........................................');
+
+    final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+    
+    final AuthCredential credential = GoogleAuthProvider.credential(
+      idToken: googleAuth.idToken,
+    );
+    final UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+
+    print("Google sign-in successful. Firebase UID: ${userCredential.user!.uid}");
+    
+    Navigator.of(context).pushReplacementNamed("/main");
+
+  } on FirebaseAuthException catch (e) {
+    print(e.message);
+    String errorMessage = 'Sign-In failed: ${e.message ?? 'An unknown Firebase error occurred.'}';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(errorMessage)),
+    );
+  } catch (error) {
+    print(error);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Google Sign-In failed: $error')),
+    );
+  } finally {
+    setState(() {
+      _isGoogleLoading = false;
+    });
   }
+}
 
   Future<void> _handleLogin() async {
     setState(() {
@@ -126,12 +173,12 @@ class _Login_pageState extends State<Login_page> {
     bool response = false;
     
     if (_authMethod == 'phone') {
+      String fullPhoneNumber = _selectedCountryCode + _phonecontroller.text;
       response = await context.read<LoginProvider>().login(
-          _phonecontroller.text,
+          fullPhoneNumber,
           _phonePasswordController.text,
           context);
     } else if (_authMethod == 'email') {
-      // You'll need to add an email login method to your LoginProvider
       response = await context.read<LoginProvider>().loginWithEmail(
           _emailController.text,
           _emailPasswordController.text,
@@ -247,25 +294,72 @@ class _Login_pageState extends State<Login_page> {
   Widget _buildPhoneAuthForm() {
     return Column(
       children: [
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(5),
-            color: AppColors.lighter,
-          ),
-          child: TextFormField(
-            controller: _phonecontroller,
-            keyboardType: TextInputType.phone,
-            decoration: InputDecoration(
-              icon: const Padding(
-                padding: EdgeInsets.all(8.0),
-                child: Icon(Icons.phone),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(5),
+                color: AppColors.lighter,
               ),
-              filled: true,
-              fillColor: AppColors.lighter,
-              labelText: "Phone Number ie 078... or 075...",
-              errorText: _phoneErrorText,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _selectedCountryCode,
+                  dropdownColor: AppColors.lighter,
+                  icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                  items: _countryCodes.map((country) {
+                    return DropdownMenuItem<String>(
+                      value: country['code'],
+                      child: Row(
+                        children: [
+                          Text(
+                            country['flag']!,
+                            style: const TextStyle(fontSize: 20),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            country['code']!,
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (String? newValue) {
+                    setState(() {
+                      _selectedCountryCode = newValue!;
+                    });
+                  },
+                ),
+              ),
             ),
-          ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(5),
+                  color: AppColors.lighter,
+                ),
+                child: TextFormField(
+                  controller: _phonecontroller,
+                  keyboardType: TextInputType.phone,
+                  decoration: InputDecoration(
+                    icon: const Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Icon(Icons.phone),
+                    ),
+                    filled: true,
+                    fillColor: AppColors.lighter,
+                    labelText: "Phone Number",
+                    hintText: "782123456",
+                    errorText: _phoneErrorText,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 25),
         Container(
@@ -361,12 +455,10 @@ class _Login_pageState extends State<Login_page> {
                 ),
                 const SizedBox(height: 45),
                 
-                // Authentication method selector
                 _buildAuthMethodSelector(),
                 
                 const SizedBox(height: 25),
                 
-                // Dynamic form based on selected auth method
                 AnimatedSwitcher(
                   duration: const Duration(milliseconds: 300),
                   child: _authMethod == 'phone' 
@@ -396,7 +488,6 @@ class _Login_pageState extends State<Login_page> {
                 
                 const SizedBox(height: 25),
                 
-                // Login Button
                 SizedBox(
                   width: double.infinity,
                   height: 40,
@@ -420,7 +511,6 @@ class _Login_pageState extends State<Login_page> {
                 
                 const SizedBox(height: 20),
                 
-                // Divider
                 const Row(
                   children: [
                     Expanded(child: Divider(color: Colors.white54, thickness: 1)),
@@ -437,7 +527,6 @@ class _Login_pageState extends State<Login_page> {
                 
                 const SizedBox(height: 20),
                 
-                // Google Sign-In Button
                 SizedBox(
                   width: double.infinity,
                   height: 40,
@@ -469,7 +558,6 @@ class _Login_pageState extends State<Login_page> {
                 
                 const SizedBox(height: 40),
                 
-                // Register Button
                 SizedBox(
                   height: 40,
                   width: double.infinity,

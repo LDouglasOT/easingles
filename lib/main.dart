@@ -22,7 +22,7 @@ import 'package:easingles/Pages/home_page.dart';
 import 'package:easingles/Pages/MainPage.dart';
 import 'package:easingles/Provider/LoginProvider.dart';
 import 'package:easingles/Provider/RegisterProvider.dart';
-import 'package:easingles/Provider/FirebaseChatProvider.dart';
+import 'package:easingles/Provider/BackendChatProvider.dart';
 import 'package:easingles/assets/app.colors.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:provider/provider.dart';
@@ -40,7 +40,14 @@ void main() async {
   String? userId = await OneSignal.User.getOnesignalId();
   print(userId);
   SharedPreferences prefs = await SharedPreferences.getInstance();
-  await Firebase.initializeApp();
+try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    print("✅ Firebase initialized successfully!");
+  } catch (e) {
+    print("❌ Firebase initialization FAILED: $e");
+  }
   var token = prefs.getString('id');
   var intro = prefs.getString('intro');
   if (intro == null) {
@@ -64,7 +71,7 @@ class _MyAppState extends State<MyApp> {
       providers: [
         ChangeNotifierProvider(create: (context) => LoginProvider()),
         ChangeNotifierProvider(create: (context) => RegisterProvider()),
-        ChangeNotifierProvider(create: (context) => FirebaseChatProvider())
+        ChangeNotifierProvider(create: (context) => BackendChatProvider())
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,

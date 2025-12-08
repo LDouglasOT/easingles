@@ -1,3 +1,4 @@
+import 'package:easingles/Pages/Moments.dart';
 import 'package:flutter/material.dart';
 import 'package:easingles/Pages/ChatScreen.dart';
 import 'package:easingles/Pages/Profilepage.dart';

@@ -1,8 +1,10 @@
 import 'dart:io';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:flutter_snackbar_content/flutter_snackbar_content.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:easingles/Components/AppButton.dart';
 import 'package:easingles/Components/Text_input.dart';
@@ -36,9 +38,10 @@ enum RegistrationType {
 }
 
 class _RegisterState extends State<Register> {
-  final String pagename = "Account Registration";
-
+  final String pagename = "Account Registration  }";
+  final GoogleSignIn signIn = GoogleSignIn.instance;
   final _pageController = PageController();
+  bool _isGoogleLoading = false;
 
   @override
   void initState() {
@@ -76,6 +79,67 @@ class _RegisterState extends State<Register> {
 
   List<File?> _selectedImages = [];
 
+
+  Future<void> _handleGoogleSignIn() async {
+      setState(() {
+        _isGoogleLoading = true;
+      });
+
+      try {
+        signIn.initialize();
+      signIn.initialize(
+        serverClientId:'1048511336383-oc57lcet02qh49kn751r5g8vu8hn74bs.apps.googleusercontent.com',
+        
+      );
+        final GoogleSignInAccount? googleUser = await signIn.authenticate();
+
+        if (googleUser == null) {
+          return; 
+        }
+        print(googleUser.toString());
+        print(googleUser.email);
+
+
+        phonecontroller.text = googleUser.email;
+        firstnamecontroller.text = googleUser.displayName!.split(' ')[0] ?? '';
+        lastnamecontroller.text = googleUser.displayName!.split(' ')[1] ?? '';
+        emailcontroller.text = googleUser.email!;
+
+
+        print(googleUser.displayName);
+        print(googleUser.id);
+        print(googleUser.photoUrl);
+        print(googleUser.authentication);
+        print(googleUser.authorizationClient);
+        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+        
+        final AuthCredential credential = GoogleAuthProvider.credential(
+          idToken: googleAuth.idToken,
+        );
+        final UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+
+        print("Google sign-in successful. Firebase UID: ${userCredential.user!.uid}");
+        _currentPage = _currentPage + 2;
+        _pageController.jumpToPage(_currentPage);
+
+      } on FirebaseAuthException catch (e) {
+        print(e.message);
+        String errorMessage = 'Sign-In failed: ${e.message ?? 'An unknown Firebase error occurred.'}';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errorMessage)),
+        );
+      } catch (error) {
+        print(error);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Google Sign-In failed: $error')),
+        );
+      } finally {
+        setState(() {
+          _isGoogleLoading = false;
+        });
+      }
+    }
+
   // Email validation
   bool _isValidEmail(String email) {
     final emailRegex = RegExp(
@@ -90,7 +154,10 @@ class _RegisterState extends State<Register> {
     context: context,
     barrierDismissible: false,
     builder: (BuildContext dialogContext) {
+
       return AlertDialog(
+        backgroundColor: AppColors.lighter,
+        
         title: Row(
           children: [
             Icon(Icons.info, color: Colors.blueAccent),
@@ -128,7 +195,7 @@ class _RegisterState extends State<Register> {
             },
             child: Text(
               "PICK IMAGES",
-              style: TextStyle(color: accentGreen),
+              style: TextStyle(color: Colors.white),
             ),
           ),
           TextButton(
@@ -137,7 +204,7 @@ class _RegisterState extends State<Register> {
             },
             child: Text(
               "CONTINUE",
-              style: TextStyle(color: accentGreen, fontWeight: FontWeight.bold),
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -249,13 +316,25 @@ class _RegisterState extends State<Register> {
           },
           icon: Icon(Icons.arrow_back_ios_new, color: Colors.white),
         ),
-        title: Text(
-          pagename,
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
+        title: Column(
+          children: [
+            Text(
+              pagename,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+             Text(
+              emailcontroller.text,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
         ),
         centerTitle: true,
       ),
@@ -316,9 +395,14 @@ class _RegisterState extends State<Register> {
                 _buildGenderDobPage(),
                 _buildImagesPage(),
               ],
+              
             ),
           ),
         ],
+
+
+
+
       ),
     );
   }
@@ -565,6 +649,35 @@ class _RegisterState extends State<Register> {
                 }
               },
             ),
+            SizedBox(height: 20),
+            SizedBox(
+                  width: double.infinity,
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black87,
+                    ),
+                    onPressed: _isGoogleLoading ? null : _handleGoogleSignIn,
+                    icon: _isGoogleLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                          ),
+                        )
+                      : Image.asset(
+                          'lib/assets/images/google.png',
+                          height: 24,
+                        ),
+                    label: const Text(
+                      'Sign in with Google',
+                      style: TextStyle(fontSize: 16),
+                    ),
+                  ),
+                ),
           ],
         ),
       ),
@@ -959,9 +1072,46 @@ class _RegisterState extends State<Register> {
                 child: SizedBox(
                   height: 200,
                   child: ScrollDatePicker(
+                    viewType: [DatePickerViewType.day, DatePickerViewType.month, DatePickerViewType.year],
                     selectedDate: _selectedDate,
+                    scrollViewOptions: DatePickerScrollViewOptions(
+                      year: ScrollViewDetailOptions(
+                        selectedTextStyle: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: _secondaryYellow,
+                        ),
+                        textStyle: TextStyle(
+                          fontSize: 16,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      month: ScrollViewDetailOptions(
+                        margin: EdgeInsets.symmetric(horizontal: 6),
+                          selectedTextStyle: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: _secondaryYellow,
+                        ),
+                        textStyle: TextStyle(
+                          fontSize: 16,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      day: ScrollViewDetailOptions(
+                          selectedTextStyle: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: _secondaryYellow,
+                        ),
+                        textStyle: TextStyle(
+                          fontSize: 16,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ),
                     options: DatePickerOptions(
-                      backgroundColor: Colors.white,
+                      // backgroundColor: AppColors.lighter,
                       itemExtent: 50,
                     ),
                     locale: Locale('en'),

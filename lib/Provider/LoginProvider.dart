@@ -1,3 +1,4 @@
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -7,8 +8,11 @@ import 'package:easingles/assets/urlconfig.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart' hide User;
 
 class LoginProvider extends ChangeNotifier {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
   late String apikey;
   late String firstname;
   late String lastName;
@@ -17,10 +21,72 @@ class LoginProvider extends ChangeNotifier {
 
 
   Future<bool> loginWithEmail(String email, String password, BuildContext context) async {
+    try {
+      final UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
 
-  return false;
-}
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          elevation: 0,
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.green,
+          content: Text(
+            'Success! Authenticated via Firebase. Logging you in...',
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
+      );
 
+      
+
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setString('firebase_uid', userCredential.user!.uid);
+      await prefs.setString('id', userCredential.user!.uid);
+
+      return true;
+
+    } on FirebaseAuthException catch (e) {
+      String errorMessage;
+      if (e.code == 'user-not-found' || e.code == 'wrong-password') {
+        errorMessage = 'Invalid login credentials. Please check your email and password.';
+      } else if (e.code == 'invalid-email') {
+        errorMessage = 'The email address is not valid.';
+      } else if (e.code == 'user-disabled') {
+        errorMessage = 'This user account has been disabled.';
+      } else {
+        errorMessage = 'Login failed: ${e.message ?? 'An unknown Firebase error occurred.'}';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          elevation: 0,
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red,
+          content: Text(
+            errorMessage,
+            style: const TextStyle(color: Colors.white),
+          ),
+        ),
+      );
+      return false;
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          elevation: 0,
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red,
+          content: Text(
+            'An unexpected error occurred: $e',
+            style: const TextStyle(color: Colors.white),
+          ),
+        ),
+      );
+      return false;
+    }
+  }
+  
   Future<bool> login(
       String username,
       String password,
@@ -64,7 +130,7 @@ class LoginProvider extends ChangeNotifier {
           ScaffoldMessenger.of(context)
             ..hideCurrentSnackBar()
             ..showSnackBar(snackBar);
-          User finalData = User.fromJson(data);
+          final User finalData = User.fromJson(data);
           final SharedPreferences prefs = await SharedPreferences.getInstance();
           await prefs.setString('token', finalData.token);
           await prefs.setString('gender', finalData.gender);
@@ -72,7 +138,7 @@ class LoginProvider extends ChangeNotifier {
 
           return true;
         } catch (e) {
-          print("Error during login:");
+          print("Error during login (JSON parsing/Storage): $e");
           return false;
         }
       } else if (response.statusCode == 401) {
@@ -88,7 +154,7 @@ class LoginProvider extends ChangeNotifier {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(snackBar);
-        debugPrint("Login failed: ${response.statusCode}");
+        debugPrint("Login failed (401): ${response.statusCode}");
         return false;
       } else if (response.statusCode == 400) {
         const snackBar = SnackBar(
@@ -96,14 +162,14 @@ class LoginProvider extends ChangeNotifier {
           behavior: SnackBarBehavior.floating,
           backgroundColor: Colors.orange,
           content: Text(
-            'User doesnot exist',
+            'User does not exist',
             style: TextStyle(color: Colors.white),
           ),
         );
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(snackBar);
-        debugPrint("Login failed: ${response.statusCode}");
+        debugPrint("Login failed (400): ${response.statusCode}");
         return false;
       } else {
         const snackBar = SnackBar(
@@ -122,9 +188,8 @@ class LoginProvider extends ChangeNotifier {
         return false;
       }
     } catch (e) {
-      debugPrint("Error during login: $e");
+      debugPrint("Error during login (Network/Other): $e");
       return false;
     }
-    return false;
   }
 }
