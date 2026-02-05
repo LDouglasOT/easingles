@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -6,18 +7,22 @@ import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:flutter_snackbar_content/flutter_snackbar_content.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:easingles/Components/AppButton.dart';
-import 'package:easingles/Components/Text_input.dart';
-import 'package:easingles/Components/Toolbar.dart';
-import 'package:easingles/Provider/LoginProvider.dart';
-import 'package:easingles/Provider/RegisterProvider.dart';
-import 'package:easingles/assets/app.colors.dart';
-import 'package:easingles/styles/app.text.dart';
+import 'package:mazale/Components/AppButton.dart';
+import 'package:mazale/Components/Text_input.dart';
+import 'package:mazale/Components/Toolbar.dart';
+import 'package:mazale/Models/Authmodel.dart';
+import 'package:mazale/Pages/PhotoUploadPage.dart';
+import 'package:mazale/Provider/LoginProvider.dart';
+import 'package:mazale/Provider/RegisterProvider.dart';
+import 'package:mazale/assets/app.colors.dart';
+import 'package:mazale/assets/urlconfig.dart';
+import 'package:mazale/styles/app.text.dart';
 import 'package:otp_text_field/otp_field.dart';
 import 'package:otp_text_field/otp_text_field.dart';
 import 'package:otp_text_field/style.dart';
 import 'package:provider/provider.dart';
 import 'package:scroll_date_picker/scroll_date_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:step_progress_indicator/step_progress_indicator.dart';
 import 'package:http/http.dart' as http;
 
@@ -26,19 +31,26 @@ class Register extends StatefulWidget {
   State<Register> createState() => _RegisterState();
 }
 
-enum Gender {
-  Male,
-  Female,
-  Other,
-}
+enum Gender { Male, Female, Other }
 
-enum RegistrationType {
-  Phone,
-  Email,
+enum RegistrationType { Phone }
+
+class Country {
+  final String name;
+  final String code;
+  final String dialCode;
+  final String flag;
+
+  Country({
+    required this.name,
+    required this.code,
+    required this.dialCode,
+    required this.flag,
+  });
 }
 
 class _RegisterState extends State<Register> {
-  final String pagename = "Account Registration  }";
+  final String pagename = "Account Registration";
   final GoogleSignIn signIn = GoogleSignIn.instance;
   final _pageController = PageController();
   bool _isGoogleLoading = false;
@@ -49,6 +61,30 @@ class _RegisterState extends State<Register> {
   }
 
   late int _currentPage = 1;
+
+  String _enteredOtp = '';
+  String? _verifiedPhoneNumber; // Store verified phone number
+
+  // Country code selection
+  Country _selectedCountry = Country(
+    name: 'Uganda',
+    code: 'UG',
+    dialCode: '+256',
+    flag: '🇺🇬',
+  );
+
+  final List<Country> _countries = [
+    Country(name: 'Uganda', code: 'UG', dialCode: '+256', flag: '🇺🇬'),
+    Country(name: 'Kenya', code: 'KE', dialCode: '+254', flag: '🇰🇪'),
+    Country(name: 'Tanzania', code: 'TZ', dialCode: '+255', flag: '🇹🇿'),
+    Country(name: 'Rwanda', code: 'RW', dialCode: '+250', flag: '🇷🇼'),
+    Country(name: 'South Africa', code: 'ZA', dialCode: '+27', flag: '🇿🇦'),
+    Country(name: 'Nigeria', code: 'NG', dialCode: '+234', flag: '🇳🇬'),
+    Country(name: 'Ghana', code: 'GH', dialCode: '+233', flag: '🇬🇭'),
+    Country(name: 'United States', code: 'US', dialCode: '+1', flag: '🇺🇸'),
+    Country(name: 'United Kingdom', code: 'GB', dialCode: '+44', flag: '🇬🇧'),
+    Country(name: 'India', code: 'IN', dialCode: '+91', flag: '🇮🇳'),
+  ];
 
   bool _isLoadingSendOtp = false;
   bool _isLoadingVerifyOtp = false;
@@ -66,7 +102,7 @@ class _RegisterState extends State<Register> {
   final Color _earthyBeige = Color(0xFFF4F1DE);
 
   // Registration type selection
-  RegistrationType _registrationType = RegistrationType.Phone;
+  final RegistrationType _registrationType = RegistrationType.Phone;
 
   final phonecontroller = TextEditingController();
   final emailcontroller = TextEditingController();
@@ -79,140 +115,442 @@ class _RegisterState extends State<Register> {
 
   List<File?> _selectedImages = [];
 
-
   Future<void> _handleGoogleSignIn() async {
-      setState(() {
-        _isGoogleLoading = true;
-      });
+    setState(() => _isGoogleLoading = true);
 
-      try {
-        signIn.initialize();
+    try {
+      signIn.initialize();
       signIn.initialize(
-        serverClientId:'1048511336383-oc57lcet02qh49kn751r5g8vu8hn74bs.apps.googleusercontent.com',
-        
+        serverClientId:
+            '1048511336383-oc57lcet02qh49kn751r5g8vu8hn74bs.apps.googleusercontent.com',
       );
-        final GoogleSignInAccount? googleUser = await signIn.authenticate();
+      final GoogleSignInAccount? googleUser = await signIn.authenticate();
+      if (googleUser == null) return;
 
-        if (googleUser == null) {
-          return; 
-        }
-        print(googleUser.toString());
-        print(googleUser.email);
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+      final AuthCredential credential = GoogleAuthProvider.credential(
+        idToken: googleAuth.idToken,
+      );
+      final UserCredential userCredential =
+          await FirebaseAuth.instance.signInWithCredential(credential);
 
+      String? idToken = await userCredential.user?.getIdToken();
 
-        phonecontroller.text = googleUser.email;
-        firstnamecontroller.text = googleUser.displayName!.split(' ')[0] ?? '';
-        lastnamecontroller.text = googleUser.displayName!.split(' ')[1] ?? '';
-        emailcontroller.text = googleUser.email!;
+      var response = await http.post(
+        Uri.parse("${AppUrls.production}/api/auth/google/"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"idToken": idToken}),
+      );
 
+      if (response.statusCode == 200) {
+        var data = jsonDecode(response.body);
+        final DjangoAuthUser finalData = DjangoAuthUser.fromJson(data['user']);
+        print(response.body.toString());
 
-        print(googleUser.displayName);
-        print(googleUser.id);
-        print(googleUser.photoUrl);
-        print(googleUser.authentication);
-        print(googleUser.authorizationClient);
-        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+        final SharedPreferences prefs = await SharedPreferences.getInstance();
+        await prefs.setString('token', data['token']);
+        await prefs.setString('refresh_token', data['refresh_token']);
+        await prefs.setString('id', finalData.id!);
+        await prefs.setString('firstname', finalData.firstName!);
+        await prefs.setString('lastname', finalData.lastName!);
         
-        final AuthCredential credential = GoogleAuthProvider.credential(
-          idToken: googleAuth.idToken,
+        if (data['is_new_user']) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => PhotoUploadPage(googleId: data['google_id']),
+            ),
+          );
+        } else {
+          Navigator.of(context).pushReplacementNamed("/main");
+        }
+      } else {
+        const snackBar = SnackBar(
+          elevation: 0,
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red,
+          content: Text(
+            'Google Sign-In failed: Please register an account first.',
+            style: TextStyle(color: Colors.white),
+          ),
         );
-        final UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
-
-        print("Google sign-in successful. Firebase UID: ${userCredential.user!.uid}");
-        _currentPage = _currentPage + 2;
-        _pageController.jumpToPage(_currentPage);
-
-      } on FirebaseAuthException catch (e) {
-        print(e.message);
-        String errorMessage = 'Sign-In failed: ${e.message ?? 'An unknown Firebase error occurred.'}';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(errorMessage)),
-        );
-      } catch (error) {
-        print(error);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Google Sign-In failed: $error')),
-        );
-      } finally {
-        setState(() {
-          _isGoogleLoading = false;
-        });
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(snackBar);
       }
+    } catch (error) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $error')),
+      );
+    } finally {
+      setState(() => _isGoogleLoading = false);
     }
-
-  // Email validation
-  bool _isValidEmail(String email) {
-    final emailRegex = RegExp(
-      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
-    );
-    return emailRegex.hasMatch(email);
   }
 
+  // Helper function to format phone number
+  // Removes leading 0 and + from dial code
+  // Input: "+256" + "0740733532" -> Output: "256740733532"
+  String _formatPhoneNumber(String dialCode, String phone) {
+    // Remove leading 0 from phone number if present
+    String cleanPhone = phone.trim();
+    if (cleanPhone.startsWith('0')) {
+      cleanPhone = cleanPhone.substring(1);
+    }
+    // Remove + from dial code and concatenate
+    String cleanDialCode = dialCode.replaceAll('+', '');
+    return cleanDialCode + cleanPhone;
+  }
+
+  // Send OTP via Django Backend
+  Future<void> _sendPhoneOtp() async {
+    String formattedPhone = _formatPhoneNumber(
+      _selectedCountry.dialCode, 
+      phonecontroller.text.trim()
+    );
+
+    if (phonecontroller.text.isEmpty) {
+      _showSnackBar('Please enter your phone number', ContentType.warning);
+      return;
+    }
+
+    setState(() => _isLoadingSendOtp = true);
+
+    try {
+      var response = await http.post(
+        Uri.parse("${AppUrls.production}/api/auth/request-otp/"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"phone_number": formattedPhone}),
+      );
+
+      setState(() => _isLoadingSendOtp = false);
+
+      if (response.statusCode == 200) {
+        var data = jsonDecode(response.body);
+        _showSnackBar(
+          data['message'] ?? 'OTP sent successfully!',
+          ContentType.success,
+        );
+
+        // Move to OTP page
+        setState(() => _currentPage = _currentPage + 1);
+        _pageController.nextPage(
+          duration: Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+        );
+      } else {
+        var errorData = jsonDecode(response.body);
+        _showSnackBar(
+          errorData['error'] ?? 'Failed to send OTP',
+          ContentType.failure,
+        );
+      }
+    } catch (e) {
+      setState(() => _isLoadingSendOtp = false);
+      print("Error sending OTP: $e");
+      _showSnackBar(
+        'Failed to send OTP. Please try again',
+        ContentType.failure,
+      );
+    }
+  }
+
+  // Verify OTP via Django Backend
+  Future<void> _verifyPhoneOtp(String otp) async {
+    String formattedPhone = _formatPhoneNumber(
+      _selectedCountry.dialCode, 
+      phonecontroller.text.trim()
+    );
+
+    if (otp.length != 5) {
+      _showSnackBar('Please enter the complete OTP', ContentType.warning);
+      return;
+    }
+
+    setState(() => _isLoadingVerifyOtp = true);
+
+    try {
+      var response = await http.post(
+        Uri.parse("${AppUrls.production}/api/auth/verify-otp/"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "phone_number": formattedPhone,
+          "otp_code": otp,
+        }),
+      );
+
+      setState(() => _isLoadingVerifyOtp = false);
+
+      if (response.statusCode == 200) {
+        var data = jsonDecode(response.body);
+        _verifiedPhoneNumber = data['phone_number'];
+        
+        _showSnackBar('Phone verified successfully!', ContentType.success);
+
+        // Move to next page
+        setState(() => _currentPage = _currentPage + 1);
+        _pageController.nextPage(
+          duration: Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+        );
+      } else {
+        var errorData = jsonDecode(response.body);
+        _showSnackBar(
+          errorData['error'] ?? 'Invalid OTP',
+          ContentType.failure,
+        );
+      }
+    } catch (e) {
+      setState(() => _isLoadingVerifyOtp = false);
+      _showSnackBar('Verification failed. Please try again', ContentType.failure);
+    }
+  }
+
+  // Resend OTP
+  Future<void> _resendOtp() async {
+    await _sendPhoneOtp();
+  }
+
+  // Complete Registration
+  Future<void> _completeRegistration() async {
+    if (_selectedImages.isEmpty) {
+      _showSnackBar(
+        'Please add at least one photo to continue',
+        ContentType.failure,
+      );
+      return;
+    }
+
+    if (_verifiedPhoneNumber == null) {
+      _showSnackBar('Phone number not verified', ContentType.failure);
+      return;
+    }
+
+    setState(() => _isLoadingRegister = true);
+
+    try {
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse("${AppUrls.production}/api/auth/register/"),
+      );
+
+      // Add phone number and other fields
+      request.fields['phone_number'] = _verifiedPhoneNumber!;
+      request.fields['first_name'] = firstnamecontroller.text;
+      request.fields['last_name'] = lastnamecontroller.text;
+      request.fields['password'] = password.text;
+      request.fields['gender'] = _selectedGender.toString().split('.').last;
+      request.fields['day'] = _selectedDate.day.toString();
+      request.fields['month'] = _selectedDate.month.toString();
+      request.fields['year'] = _selectedDate.year.toString();
+      request.fields['otp_code'] = _enteredOtp;
+
+      // Add images
+      for (var i = 0; i < _selectedImages.length; i++) {
+        if (_selectedImages[i] != null) {
+          var file = await http.MultipartFile.fromPath(
+            'user_images',
+            _selectedImages[i]!.path,
+          );
+          request.files.add(file);
+        }
+      }
+
+      var streamedResponse = await request.send();
+      var response = await http.Response.fromStream(streamedResponse);
+
+      setState(() => _isLoadingRegister = false);
+
+      if (response.statusCode == 201) {
+        var data = jsonDecode(response.body);
+        
+        // Save tokens
+        final SharedPreferences prefs = await SharedPreferences.getInstance();
+        await prefs.setString('token', data['token']);
+        await prefs.setString('refresh_token', data['refresh_token']);
+        await prefs.setString('id', data['user']['id'].toString());
+        await prefs.setString('firstname', data['user']['first_name']);
+        await prefs.setString('lastname', data['user']['last_name']);
+
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext dialogContext) {
+            return AlertDialog(
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.start,
+                children: [
+                  Icon(Icons.check_circle, color: Colors.green),
+                  SizedBox(width: 10),
+                  Text('Welcome! 🎉'),
+                ],
+              ),
+              content: const Text(
+                "Your account has been created successfully! We have a surprise gift for you. Login to redeem it from the gifts section.",
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pushReplacementNamed('/main');
+                  },
+                  child: Text(
+                    "GET STARTED",
+                    style: TextStyle(
+                      color: _accentGreen,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      } else {
+        var errorData = jsonDecode(response.body);
+        _showSnackBar(
+          errorData['error'] ?? 'Registration failed',
+          ContentType.failure,
+        );
+      }
+    } catch (e) {
+      setState(() => _isLoadingRegister = false);
+      print("Registration error: $e");
+      _showSnackBar('Registration failed. Please try again', ContentType.failure);
+    }
+  }
+
+  // Country picker bottom sheet
+  void _showCountryPicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Container(
+          padding: EdgeInsets.symmetric(vertical: 20),
+          height: 400,
+          child: Column(
+            children: [
+              Text(
+                'Select Country',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: _deepBrown,
+                ),
+              ),
+              SizedBox(height: 20),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: _countries.length,
+                  itemBuilder: (context, index) {
+                    final country = _countries[index];
+                    final isSelected = _selectedCountry.code == country.code;
+
+                    return ListTile(
+                      leading: Text(
+                        country.flag,
+                        style: TextStyle(fontSize: 32),
+                      ),
+                      title: Text(
+                        country.name,
+                        style: TextStyle(
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                          color: isSelected ? _primaryOrange : _deepBrown,
+                        ),
+                      ),
+                      trailing: Text(
+                        country.dialCode,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: isSelected
+                              ? _primaryOrange
+                              : _deepBrown.withOpacity(0.6),
+                        ),
+                      ),
+                      selected: isSelected,
+                      selectedTileColor: _primaryOrange.withOpacity(0.1),
+                      onTap: () {
+                        setState(() {
+                          _selectedCountry = country;
+                        });
+                        Navigator.pop(context);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   void showImageNoticeDialog(BuildContext context, Color accentGreen) {
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (BuildContext dialogContext) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          backgroundColor: AppColors.lighter,
+          title: Row(
+            children: [
+              Icon(Icons.info, color: Colors.blueAccent),
+              SizedBox(width: 10),
+              Text('Notice !'),
+            ],
+          ),
+          content: Text(
+            "All account with fake images that donot contain people will be banned permanently to protect our users from scammers. All earned virtual gifts will be revoked. You can always change your selection by clicking on 'pick images' or 'continue' if you are confident with your selection. Thanks.",
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
 
-      return AlertDialog(
-        backgroundColor: AppColors.lighter,
-        
-        title: Row(
-          children: [
-            Icon(Icons.info, color: Colors.blueAccent),
-            SizedBox(width: 10),
-            Text('Notice !'),
-          ],
-        ),
-        content: Text(
-          "All account with fake images that donot contain people will be banned permanently to protect our users from scammers. All earned virtual gifts will be revoked. You can always change your selection by clicking on 'pick images' or 'continue' if you are confident with your selection. Thanks.",
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () async {
-              Navigator.of(dialogContext).pop();
+                List<XFile>? images = await ImagePicker().pickMultiImage(
+                  imageQuality: 85,
+                  maxWidth: 500,
+                );
 
-              List<XFile>? images = await ImagePicker().pickMultiImage(
-                imageQuality: 85,
-                maxWidth: 500,
-              );
+                if (images != null) {
+                  List<File?> tempImages = [];
+                  for (XFile image in images) {
+                    if (tempImages.length == 4) break;
+                    tempImages.add(File(image.path));
+                  }
 
-              if (images != null) {
-                List<File?> tempImages = [];
-                for (XFile image in images) {
-                  if (tempImages.length == 4) break;
-                  tempImages.add(File(image.path));
+                  setState(() {
+                    _selectedImages = tempImages;
+                  });
+
+                  print('Selected ${tempImages.length} images.');
                 }
-
-                // ADD THIS setState() TO UPDATE THE UI
-                setState(() {
-                  _selectedImages = tempImages;
-                });
-
-                print('Selected ${tempImages.length} images.');
-              }
-            },
-            child: Text(
-              "PICK IMAGES",
-              style: TextStyle(color: Colors.white),
+              },
+              child: Text("PICK IMAGES", style: TextStyle(color: Colors.white)),
             ),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-            },
-            child: Text(
-              "CONTINUE",
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+              },
+              child: Text(
+                "CONTINUE",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
-          ),
-        ],
-      );
-    },
-  );
-}
-
+          ],
+        );
+      },
+    );
+  }
 
   Future<void> _pickImages() async {
     if (_selectedImages.isEmpty) {
@@ -316,25 +654,13 @@ class _RegisterState extends State<Register> {
           },
           icon: Icon(Icons.arrow_back_ios_new, color: Colors.white),
         ),
-        title: Column(
-          children: [
-            Text(
-              pagename,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-             Text(
-              emailcontroller.text,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
+        title: Text(
+          pagename,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         centerTitle: true,
       ),
@@ -395,14 +721,9 @@ class _RegisterState extends State<Register> {
                 _buildGenderDobPage(),
                 _buildImagesPage(),
               ],
-              
             ),
           ),
         ],
-
-
-
-
       ),
     );
   }
@@ -424,19 +745,11 @@ class _RegisterState extends State<Register> {
               ),
               child: Row(
                 children: [
-                  Icon(
-                    _registrationType == RegistrationType.Phone
-                        ? Icons.phone_android
-                        : Icons.email,
-                    color: _primaryOrange,
-                    size: 28,
-                  ),
+                  Icon(Icons.phone_android, color: _primaryOrange, size: 28),
                   SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      _registrationType == RegistrationType.Phone
-                          ? 'Enter your phone number'
-                          : 'Enter your email address',
+                      'Enter your phone number',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -448,236 +761,98 @@ class _RegisterState extends State<Register> {
               ),
             ),
             SizedBox(height: 24),
-            // Registration type toggle
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _registrationType = RegistrationType.Phone;
-                        });
-                      },
-                      child: Container(
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        decoration: BoxDecoration(
-                          color: _registrationType == RegistrationType.Phone
-                              ? _primaryOrange
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.phone,
-                              color: _registrationType == RegistrationType.Phone
-                                  ? Colors.white
-                                  : _deepBrown.withOpacity(0.5),
-                              size: 20,
-                            ),
-                            SizedBox(width: 8),
-                            Text(
-                              'Phone',
-                              style: TextStyle(
-                                color: _registrationType == RegistrationType.Phone
-                                    ? Colors.white
-                                    : _deepBrown.withOpacity(0.5),
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
+            Row(
+              children: [
+                GestureDetector(
+                  onTap: _showCountryPicker,
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: _primaryOrange.withOpacity(0.2),
                       ),
                     ),
-                  ),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _registrationType = RegistrationType.Email;
-                        });
-                      },
-                      child: Container(
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        decoration: BoxDecoration(
-                          color: _registrationType == RegistrationType.Email
-                              ? _primaryOrange
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(16),
+                    child: Row(
+                      children: [
+                        Text(_selectedCountry.flag, style: TextStyle(fontSize: 24)),
+                        SizedBox(width: 8),
+                        Text(
+                          _selectedCountry.dialCode,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: _deepBrown,
+                          ),
                         ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.email,
-                              color: _registrationType == RegistrationType.Email
-                                  ? Colors.white
-                                  : _deepBrown.withOpacity(0.5),
-                              size: 20,
-                            ),
-                            SizedBox(width: 8),
-                            Text(
-                              'Email',
-                              style: TextStyle(
-                                color: _registrationType == RegistrationType.Email
-                                    ? Colors.white
-                                    : _deepBrown.withOpacity(0.5),
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                        SizedBox(width: 4),
+                        Icon(Icons.arrow_drop_down, color: _primaryOrange),
+                      ],
                     ),
                   ),
-                ],
-              ),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: phonecontroller,
+                    keyboardType: TextInputType.number,
+                    style: TextStyle(fontSize: 16, color: _deepBrown),
+                    decoration: InputDecoration(
+                      labelText: "Phone Number",
+                      hintText: "712345678",
+                      prefixIcon: Icon(Icons.phone, color: _primaryOrange),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(
+                          color: _primaryOrange.withOpacity(0.2),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(color: _primaryOrange, width: 2),
+                      ),
+                      labelStyle: TextStyle(color: _deepBrown.withOpacity(0.7)),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            SizedBox(height: 32),
-            // Input field based on selected type
-            if (_registrationType == RegistrationType.Phone)
-              TextFormField(
-                controller: phonecontroller,
-                keyboardType: TextInputType.phone,
-                style: TextStyle(fontSize: 16, color: _deepBrown),
-                decoration: InputDecoration(
-                  labelText: "Phone Number",
-                  hintText: "078... or 075...",
-                  prefixIcon: Icon(Icons.phone, color: _primaryOrange),
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: _primaryOrange.withOpacity(0.2)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: _primaryOrange, width: 2),
-                  ),
-                  labelStyle: TextStyle(color: _deepBrown.withOpacity(0.7)),
-                ),
-              )
-            else
-              TextFormField(
-                controller: emailcontroller,
-                keyboardType: TextInputType.emailAddress,
-                style: TextStyle(fontSize: 16, color: _deepBrown),
-                decoration: InputDecoration(
-                  labelText: "Email Address",
-                  hintText: "example@mail.com",
-                  prefixIcon: Icon(Icons.email, color: _primaryOrange),
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: _primaryOrange.withOpacity(0.2)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: _primaryOrange, width: 2),
-                  ),
-                  labelStyle: TextStyle(color: _deepBrown.withOpacity(0.7)),
-                ),
-              ),
             SizedBox(height: 32),
             _buildModernButton(
               text: 'Send OTP',
               isLoading: _isLoadingSendOtp,
-              onTap: () async {
-                // Validate input based on registration type
-                if (_registrationType == RegistrationType.Phone) {
-                  if (phonecontroller.text.isEmpty) {
-                    _showSnackBar('Phone Number cannot be empty', ContentType.warning);
-                    return;
-                  }
-                } else {
-                  if (emailcontroller.text.isEmpty) {
-                    _showSnackBar('Email Address cannot be empty', ContentType.warning);
-                    return;
-                  }
-                  if (!_isValidEmail(emailcontroller.text)) {
-                    _showSnackBar('Please enter a valid email address', ContentType.warning);
-                    return;
-                  }
-                }
-
-                setState(() => _isLoadingSendOtp = true);
-
-                bool response;
-                if (_registrationType == RegistrationType.Phone) {
-                  response = await context
-                      .read<RegisterProvider>()
-                      .sendotp(phonecontroller.text, context);
-                } else {
-         
-                  response = await context
-                      .read<RegisterProvider>()
-                      .sendEmailOtp(emailcontroller.text, context);
-                }
-
-                setState(() => _isLoadingSendOtp = false);
-
-                if (response) {
-                  setState(() => _currentPage = _currentPage + 1);
-                  _pageController.nextPage(
-                    duration: Duration(milliseconds: 500),
-                    curve: Curves.easeInOut,
-                  );
-                }
-              },
+              onTap: _sendPhoneOtp,
             ),
             SizedBox(height: 20),
             SizedBox(
-                  width: double.infinity,
-                  height: 40,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black87,
-                    ),
-                    onPressed: _isGoogleLoading ? null : _handleGoogleSignIn,
-                    icon: _isGoogleLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
-                          ),
-                        )
-                      : Image.asset(
-                          'lib/assets/images/google.png',
-                          height: 24,
-                        ),
-                    label: const Text(
-                      'Sign in with Google',
-                      style: TextStyle(fontSize: 16),
-                    ),
-                  ),
+              width: double.infinity,
+              height: 40,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black87,
                 ),
+                onPressed: _isGoogleLoading ? null : _handleGoogleSignIn,
+                icon: _isGoogleLoading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                        ),
+                      )
+                    : Image.asset('lib/assets/images/google.png', height: 24),
+                label: const Text('Sign in with Google', style: TextStyle(fontSize: 16)),
+              ),
+            ),
           ],
         ),
       ),
@@ -703,7 +878,7 @@ class _RegisterState extends State<Register> {
             ),
             SizedBox(height: 24),
             Text(
-              "Verify Your ${_registrationType == RegistrationType.Phone ? 'Number' : 'Email'}",
+              "Verify Your Number",
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -712,9 +887,7 @@ class _RegisterState extends State<Register> {
             ),
             SizedBox(height: 12),
             Text(
-              _registrationType == RegistrationType.Phone
-                  ? "Enter the 5-digit code sent to your phone"
-                  : "Enter the 5-digit code sent to your email",
+              "Enter the 5-digit code sent to your phone",
               style: TextStyle(
                 fontSize: 14,
                 color: _deepBrown.withOpacity(0.6),
@@ -737,27 +910,21 @@ class _RegisterState extends State<Register> {
               textFieldAlignment: MainAxisAlignment.spaceAround,
               fieldStyle: FieldStyle.box,
               onCompleted: (pin) async {
-                setState(() => _isLoadingVerifyOtp = true);
-
-                bool response = await context
-                    .read<RegisterProvider>()
-                    .verifyotp(pin, context);
-
-                setState(() => _isLoadingVerifyOtp = false);
-
-                if (response) {
-                  setState(() => _currentPage = _currentPage + 1);
-                  _pageController.nextPage(
-                    duration: Duration(milliseconds: 500),
-                    curve: Curves.easeInOut,
-                  );
-                } else {
-                  _showSnackBar(
-                    'Wrong OTP code provided',
-                    ContentType.failure,
-                  );
-                }
+                setState(() => _enteredOtp = pin);
+                await _verifyPhoneOtp(pin);
               },
+            ),
+            SizedBox(height: 20),
+            TextButton(
+              onPressed: _resendOtp,
+              child: Text(
+                'Resend OTP',
+                style: TextStyle(
+                  color: _primaryOrange,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                ),
+              ),
             ),
             SizedBox(height: 32),
             if (_isLoadingVerifyOtp)
@@ -855,24 +1022,17 @@ class _RegisterState extends State<Register> {
               text: 'Continue',
               isLoading: _isLoadingUserDetails,
               backgroundColor: _accentGreen,
-              onTap: () async {
-                setState(() => _isLoadingUserDetails = true);
-
-                bool response = context.read<RegisterProvider>().phonenumberinput(
-                      firstnamecontroller.text,
-                      lastnamecontroller.text,
-                      context,
-                    );
-
-                setState(() => _isLoadingUserDetails = false);
-
-                if (response) {
-                  setState(() => _currentPage = _currentPage + 1);
-                  _pageController.nextPage(
-                    duration: Duration(milliseconds: 500),
-                    curve: Curves.easeInOut,
-                  );
+              onTap: () {
+                if (firstnamecontroller.text.isEmpty ||
+                    lastnamecontroller.text.isEmpty) {
+                  _showSnackBar('Please enter your name', ContentType.warning);
+                  return;
                 }
+                setState(() => _currentPage = _currentPage + 1);
+                _pageController.nextPage(
+                  duration: Duration(milliseconds: 500),
+                  curve: Curves.easeInOut,
+                );
               },
             ),
           ],
@@ -930,7 +1090,9 @@ class _RegisterState extends State<Register> {
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(color: _warmTerracotta.withOpacity(0.2)),
+                  borderSide: BorderSide(
+                    color: _warmTerracotta.withOpacity(0.2),
+                  ),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
@@ -955,7 +1117,9 @@ class _RegisterState extends State<Register> {
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(color: _warmTerracotta.withOpacity(0.2)),
+                  borderSide: BorderSide(
+                    color: _warmTerracotta.withOpacity(0.2),
+                  ),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
@@ -969,17 +1133,15 @@ class _RegisterState extends State<Register> {
               text: 'Continue',
               isLoading: _isLoadingPassword,
               backgroundColor: _warmTerracotta,
-              onTap: () async {
+              onTap: () {
                 if (password.text.isEmpty || confirmpassword.text.isEmpty) {
                   _showSnackBar('Fill all password fields', ContentType.failure);
                   return;
                 }
-
                 if (password.text != confirmpassword.text) {
                   _showSnackBar('Passwords do not match', ContentType.failure);
                   return;
                 }
-
                 if (password.text.length < 6) {
                   _showSnackBar(
                     'Password too short (minimum 6 characters)',
@@ -987,24 +1149,11 @@ class _RegisterState extends State<Register> {
                   );
                   return;
                 }
-
-                setState(() => _isLoadingPassword = true);
-
-                bool response = context.read<RegisterProvider>().passwordInput(
-                      password.text,
-                      confirmpassword.text,
-                      context,
-                    );
-
-                setState(() => _isLoadingPassword = false);
-
-                if (response) {
-                  setState(() => _currentPage = _currentPage + 1);
-                  _pageController.nextPage(
-                    duration: Duration(milliseconds: 500),
-                    curve: Curves.easeInOut,
-                  );
-                }
+                setState(() => _currentPage = _currentPage + 1);
+                _pageController.nextPage(
+                  duration: Duration(milliseconds: 500),
+                  curve: Curves.easeInOut,
+                );
               },
             ),
           ],
@@ -1072,7 +1221,11 @@ class _RegisterState extends State<Register> {
                 child: SizedBox(
                   height: 200,
                   child: ScrollDatePicker(
-                    viewType: [DatePickerViewType.day, DatePickerViewType.month, DatePickerViewType.year],
+                    viewType: [
+                      DatePickerViewType.day,
+                      DatePickerViewType.month,
+                      DatePickerViewType.year,
+                    ],
                     selectedDate: _selectedDate,
                     scrollViewOptions: DatePickerScrollViewOptions(
                       year: ScrollViewDetailOptions(
@@ -1081,39 +1234,27 @@ class _RegisterState extends State<Register> {
                           fontWeight: FontWeight.bold,
                           color: _secondaryYellow,
                         ),
-                        textStyle: TextStyle(
-                          fontSize: 16,
-                          color: Colors.black87,
-                        ),
+                        textStyle: TextStyle(fontSize: 16, color: Colors.black87),
                       ),
                       month: ScrollViewDetailOptions(
                         margin: EdgeInsets.symmetric(horizontal: 6),
-                          selectedTextStyle: TextStyle(
+                        selectedTextStyle: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: _secondaryYellow,
                         ),
-                        textStyle: TextStyle(
-                          fontSize: 16,
-                          color: Colors.black87,
-                        ),
+                        textStyle: TextStyle(fontSize: 16, color: Colors.black87),
                       ),
                       day: ScrollViewDetailOptions(
-                          selectedTextStyle: TextStyle(
+                        selectedTextStyle: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: _secondaryYellow,
                         ),
-                        textStyle: TextStyle(
-                          fontSize: 16,
-                          color: Colors.black87,
-                        ),
+                        textStyle: TextStyle(fontSize: 16, color: Colors.black87),
                       ),
                     ),
-                    options: DatePickerOptions(
-                      // backgroundColor: AppColors.lighter,
-                      itemExtent: 50,
-                    ),
+                    options: DatePickerOptions(itemExtent: 50),
                     locale: Locale('en'),
                     onDateTimeChanged: (DateTime value) {
                       setState(() => _selectedDate = value);
@@ -1147,19 +1288,15 @@ class _RegisterState extends State<Register> {
               isLoading: _isLoadingGender,
               backgroundColor: _secondaryYellow,
               onTap: () {
-                bool res = context.read<RegisterProvider>().gender_age(
-                      _selectedGender.toString(),
-                      _selectedDate,
-                      context,
-                    );
-
-                if (res) {
-                  setState(() => _currentPage = _currentPage + 1);
-                  _pageController.nextPage(
-                    duration: Duration(milliseconds: 500),
-                    curve: Curves.easeInOut,
-                  );
+                if (_selectedGender == null) {
+                  _showSnackBar('Please select your gender', ContentType.warning);
+                  return;
                 }
+                setState(() => _currentPage = _currentPage + 1);
+                _pageController.nextPage(
+                  duration: Duration(milliseconds: 500),
+                  curve: Curves.easeInOut,
+                );
               },
             ),
           ],
@@ -1268,7 +1405,10 @@ class _RegisterState extends State<Register> {
                       },
                       child: Text(
                         'Clear',
-                        style: TextStyle(color: _richRed, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                          color: _richRed,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                 ],
@@ -1285,7 +1425,6 @@ class _RegisterState extends State<Register> {
                   border: Border.all(
                     color: _richRed.withOpacity(0.3),
                     width: 2,
-                    style: BorderStyle.solid,
                   ),
                 ),
                 child: Column(
@@ -1415,60 +1554,7 @@ class _RegisterState extends State<Register> {
               text: 'Complete Registration',
               isLoading: _isLoadingRegister,
               backgroundColor: _accentGreen,
-              onTap: () async {
-                if (_selectedImages.isEmpty) {
-                  _showSnackBar(
-                    'Please add at least one photo to continue',
-                    ContentType.failure,
-                  );
-                  return;
-                }
-
-                setState(() => _isLoadingRegister = true);
-
-                bool response = await context
-                    .read<RegisterProvider>()
-                    .registration(_selectedImages);
-
-                setState(() => _isLoadingRegister = false);
-
-                if (response) {
-                  showDialog(
-                    context: context,
-                    barrierDismissible: false,
-                    builder: (BuildContext dialogContext) {
-                      return AlertDialog(
-                        title: Row(
-                          mainAxisAlignment: MainAxisAlignment.start,
-                          children: [
-                            Icon(Icons.check_circle, color: Colors.green),
-                            SizedBox(width: 10),
-                            Text('Welcome! 🎉'),
-                          ],
-                        ),
-                        content: const Text(
-                          "Your account has been created successfully! We have a surprise gift for you. Login to redeem it from the gifts section.",
-                        ),
-                        actions: <Widget>[
-                          TextButton(
-                            onPressed: () {
-                              Navigator.of(dialogContext).pop();
-                              Navigator.of(context).pop();
-                            },
-                            child: Text(
-                              "GET STARTED",
-                              style: TextStyle(
-                                color: _accentGreen,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  );
-                }
-              },
+              onTap: _completeRegistration,
             ),
             SizedBox(height: 20),
           ],

@@ -1,4 +1,4 @@
-# easingles
+# mazale
 
 A new Flutter project.
 

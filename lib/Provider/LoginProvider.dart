@@ -1,10 +1,9 @@
-
 import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:easingles/Models/Authmodel.dart';
-import 'package:easingles/assets/urlconfig.dart';
+import 'package:mazale/Models/Authmodel.dart';
+import 'package:mazale/assets/urlconfig.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -19,13 +18,14 @@ class LoginProvider extends ChangeNotifier {
   late String username;
   late String password;
 
-
-  Future<bool> loginWithEmail(String email, String password, BuildContext context) async {
+  Future<bool> loginWithEmail(
+    String email,
+    String password,
+    BuildContext context,
+  ) async {
     try {
-      final UserCredential userCredential = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      final UserCredential userCredential = await _auth
+          .signInWithEmailAndPassword(email: email, password: password);
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -39,24 +39,23 @@ class LoginProvider extends ChangeNotifier {
         ),
       );
 
-      
-
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.setString('firebase_uid', userCredential.user!.uid);
       await prefs.setString('id', userCredential.user!.uid);
 
       return true;
-
     } on FirebaseAuthException catch (e) {
       String errorMessage;
       if (e.code == 'user-not-found' || e.code == 'wrong-password') {
-        errorMessage = 'Invalid login credentials. Please check your email and password.';
+        errorMessage =
+            'Invalid login credentials. Please check your email and password.';
       } else if (e.code == 'invalid-email') {
         errorMessage = 'The email address is not valid.';
       } else if (e.code == 'user-disabled') {
         errorMessage = 'This user account has been disabled.';
       } else {
-        errorMessage = 'Login failed: ${e.message ?? 'An unknown Firebase error occurred.'}';
+        errorMessage =
+            'Login failed: ${e.message ?? 'An unknown Firebase error occurred.'}';
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -86,11 +85,12 @@ class LoginProvider extends ChangeNotifier {
       return false;
     }
   }
-  
+
   Future<bool> login(
-      String username,
-      String password,
-      BuildContext context) async {
+    String username,
+    String password,
+    BuildContext context,
+  ) async {
     if (username.isEmpty || password.isEmpty) {
       const snackBar = SnackBar(
         elevation: 0,
@@ -108,16 +108,27 @@ class LoginProvider extends ChangeNotifier {
     }
 
     try {
-
       var response = await http.post(
-        Uri.parse("${AppUrls.production}/api/login"),
-        body: {"phoneNumber": username, "password": password},
+        Uri.parse("${AppUrls.production}/api/auth/login/"),
+        body: {"phone_number": username, "password": password},
       );
       print(response);
+      if (response.statusCode == 403) {
+        const snackBar = SnackBar(
+          elevation: 0,
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red,
+          content: Text(
+            'Your account is not fully registered. Please retry the registration process',
+            style: TextStyle(color: Colors.white),
+          ),
+        );
+        return false;
+      }
 
       if (response.statusCode == 200) {
+        var data = jsonDecode(response.body);
         try {
-          var data = jsonDecode(response.body);
           const snackBar = SnackBar(
             elevation: 0,
             behavior: SnackBarBehavior.floating,
@@ -130,11 +141,16 @@ class LoginProvider extends ChangeNotifier {
           ScaffoldMessenger.of(context)
             ..hideCurrentSnackBar()
             ..showSnackBar(snackBar);
-          final User finalData = User.fromJson(data);
+          final DjangoAuthUser finalData = DjangoAuthUser.fromJson(data);
+          print(finalData.token);
+          print(finalData.id);
+          print(finalData.firstName);
+          print(finalData.lastName);
           final SharedPreferences prefs = await SharedPreferences.getInstance();
-          await prefs.setString('token', finalData.token);
-          await prefs.setString('gender', finalData.gender);
-          await prefs.setString('id', finalData.id);
+          await prefs.setString('token', finalData.token!);
+          await prefs.setString('id', finalData.id!);
+          await prefs.setString('firstname', finalData.firstName!);
+          await prefs.setString('lastname', finalData.lastName!);
 
           return true;
         } catch (e) {
@@ -162,7 +178,7 @@ class LoginProvider extends ChangeNotifier {
           behavior: SnackBarBehavior.floating,
           backgroundColor: Colors.orange,
           content: Text(
-            'User does not exist',
+            'No user found with the provided credentials',
             style: TextStyle(color: Colors.white),
           ),
         );

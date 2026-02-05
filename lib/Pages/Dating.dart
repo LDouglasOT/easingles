@@ -3,27 +3,31 @@ import 'dart:math';
 import 'package:bottom_sheet_scaffold/bottom_sheet_scaffold.dart';
 import 'package:bottom_sheet_scaffold/views/bottom_sheet.dart';
 import 'package:bottom_sheet_scaffold/views/bottom_sheet_scaffold.dart';
-import 'package:easingles/Pages/Moments.dart' hide Toolbar;
+import 'package:mazale/Models/Authmodel.dart';
+import 'package:mazale/Pages/GiftsPager.dart';
+import 'package:mazale/Pages/Moments.dart' hide Toolbar;
 import 'package:flutter/material.dart';
 import 'package:flutter_snackbar_content/flutter_snackbar_content.dart';
 import 'package:flutter_toastify/components/enums.dart';
 import 'package:flutter_toastify/flutter_toastify.dart';
-import 'package:easingles/Components/Toolbar.dart';
-import 'package:easingles/Models/GiftsMode.dart' hide GiftsModel;
-import 'package:easingles/Models/models.dart';
-import 'package:easingles/Pages/ChatScreen.dart';
-import 'package:easingles/Pages/Profilepage.dart';
-import 'package:easingles/Pages/Userprofile.dart';
-import 'package:easingles/Provider/SocketProvider.dart';
-import 'package:easingles/assets/app.colors.dart';
-import 'package:easingles/assets/urlconfig.dart';
-import 'package:easingles/styles/app.text.dart';
+import 'package:mazale/Components/Toolbar.dart';
+import 'package:mazale/Models/GiftsMode.dart' hide GiftsModel;
+import 'package:mazale/Models/models.dart';
+import 'package:mazale/Pages/ChatScreen.dart';
+import 'package:mazale/Pages/Profilepage.dart';
+import 'package:mazale/Pages/Userprofile.dart';
+import 'package:mazale/Provider/ProfileProvider.dart';
+import 'package:mazale/Provider/SocketProvider.dart';
+import 'package:mazale/assets/app.colors.dart';
+import 'package:mazale/assets/urlconfig.dart';
+import 'package:mazale/styles/app.text.dart';
 import 'package:loading_indicator/loading_indicator.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:swipe_cards/swipe_cards.dart';
 import 'package:http/http.dart' as http;
 import 'package:optimized_image_loader/optimized_image_loader.dart';
+import 'package:geolocator/geolocator.dart';
 
 class Content {
   final String text;
@@ -48,16 +52,68 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
   bool showReloadButton = false;
   late String userId;
   late String username;
-  late userlist currentUser;
+  late DjangoAuthUser currentUser;
   ViewMode _viewMode = ViewMode.swipe;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
+  Position? currentPosition;
 
   dynamic recieverId = {"userId": "0", "Names": "None", "profile": "None"};
 
   GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey();
   List<SwipeItem> _swipeItems = [];
-  List<userlist> allcards = [];
+
+  Future<void> _loadUserData() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    userId = prefs.getString('id') ?? '0';
+    username = prefs.getString('username') ?? '';
+  }
+
+  Future<void> _getCurrentLocation() async {
+    try {
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      setState(() {
+        currentPosition = position;
+      });
+    } catch (e) {
+      print('Error getting location: $e');
+    }
+  }
+
+  double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+    const double earthRadius = 6371; // in kilometers
+    double dLat = (lat2 - lat1) * pi / 180;
+    double dLon = (lon2 - lon1) * pi / 180;
+    double a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(lat1 * pi / 180) * cos(lat2 * pi / 180) * sin(dLon / 2) * sin(dLon / 2);
+    double c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    return earthRadius * c;
+  }
+
+  String _getDistanceText(DjangoAuthUser user) {
+    if (currentPosition == null || user.latitude == null || user.longitude == null) {
+      return user.latitude ?? "Unknown";
+    }
+    try {
+      double userLat = double.parse(user.latitude!);
+      double userLon = double.parse(user.longitude!);
+      double distance = _calculateDistance(
+        currentPosition!.latitude,
+        currentPosition!.longitude,
+        userLat,
+        userLon,
+      );
+      if (distance < 1) {
+        return "${(distance * 1000).round()}m away";
+      } else {
+        return "${distance.round()}km away";
+      }
+    } catch (e) {
+      return user.latitude ?? "Unknown";
+    }
+  }
 
   String calculateAge(String birthDateString) {
     try {
@@ -87,9 +143,190 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
     );
-    _loadMoreItems();
+    _loadUserData();
+    _getCurrentLocation();
     fetchMyGifts();
     _animationController.forward();
+    
+    // Load profiles using provider (only fetches if not already loaded)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeProfiles();
+    });
+  }
+
+  Future<void> _initializeProfiles() async {
+    final profileProvider = Provider.of<ProfileProvider>(context, listen: false);
+    
+    // Only fetch if not already initialized
+    bool success = await profileProvider.fetchProfilesIfNeeded();
+    
+    if (success) {
+      _buildSwipeItemsFromProvider();
+    } else if (!profileProvider.hasError) {
+      // Server returned 201 - subscription required
+      Navigator.of(context).pushNamed("/purchase");
+    }
+  }
+
+  void _buildSwipeItemsFromProvider() {
+    final profileProvider = Provider.of<ProfileProvider>(context, listen: false);
+    final allcards = profileProvider.profiles;
+    
+    setState(() {
+      _swipeItems.clear();
+    });
+
+    for (var user in allcards) {
+      _swipeItems.add(
+        SwipeItem(
+          content: Content(
+            text: user.firstName ?? "",
+            color: Colors.purple,
+          ),
+          likeAction: () async {
+            _onProfileSwiped();
+            await _likeUser(user);
+          },
+          nopeAction: () {
+            _onProfileSwiped();
+          },
+          superlikeAction: () {
+            _onProfileSwiped();
+          },
+        ),
+      );
+    }
+
+    if (allcards.isNotEmpty) {
+      setState(() {
+        currentUser = allcards[0];
+      });
+    }
+
+    _matchEngine = MatchEngine(swipeItems: _swipeItems);
+    setState(() {
+      showprofile = allcards.isNotEmpty;
+      showloader = false;
+      showReloadButton = false;
+    });
+  }
+
+  void _onProfileSwiped() {
+    final profileProvider = Provider.of<ProfileProvider>(context, listen: false);
+    profileProvider.onProfileSwiped();
+    
+    // Check if user has reached free limit
+    if (profileProvider.hasReachedFreeLimit) {
+      // TODO: Check if user has premium subscription
+      // For now, navigate to subscription page
+      Navigator.of(context).pushNamed("/purchase");
+    }
+  }
+
+  Future<void> _likeUser(DjangoAuthUser user) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? token = prefs.getString('token');
+    
+    var response = await http.post(
+      Uri.parse('${AppUrls.production}/api/profile-likes/'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json'
+      },
+      body: jsonEncode({
+        "liked_user": int.parse(user.id.toString()),
+        "superlike": false,
+      }),
+    );
+
+    if (response.statusCode == 201) {
+      var data = jsonDecode(response.body);
+      if (data['is_match'] == true) {
+        _showMatchDialog(user);
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to like profile: ${response.statusCode}')),
+      );
+    }
+  }
+
+  void _showMatchDialog(DjangoAuthUser user) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: AppColors.background,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.favorite,
+                size: 80,
+                color: AppColors.primary,
+              ),
+              SizedBox(height: 16),
+              Text(
+                "It's a Match!",
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                "You and ${user.firstName} liked each other!",
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.white70,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(
+                      "Keep Swiping",
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => ChatScreen(
+                            valueToPass: user.id.toString(),
+                            profile: user.profilePic ?? "",
+                            names: '${user.firstName} ${user.lastName}',
+                            userId: user.id.toString(),
+                            username: '',
+                          ),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                    child: Text("Send Message"),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -98,122 +335,43 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
     super.dispose();
   }
 
-  late List<GiftsModel> myGifts = [];
+  late List<UserGifts> myGifts = [];
   bool giftLoaderStatus = true;
 
   Future<void> _loadMoreItems() async {
+    final profileProvider = Provider.of<ProfileProvider>(context, listen: false);
+    
     setState(() {
       showprofile = false;
       showloader = true;
       showReloadButton = false;
     });
-    try {
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      String? gender = prefs.getString("gender");
-      String? id = prefs.getString("id");
-      userId = id ?? "0";
-      username = prefs.getString("username") ?? "You";
-      String? token = prefs.getString("token");
-      var response = await http.post(
-          Uri.parse('${AppUrls.production}/api/matches'),
-          headers: {'Authorization': 'Bearer $token'},
-          body: {"id": id});
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> jsonResponse = jsonDecode(response.body);
-
-        if (jsonResponse.containsKey('data') && jsonResponse['data'] is List) {
-          final List<dynamic> profiles = jsonResponse['data'];
-          setState(() {
-            allcards.clear();
-            _swipeItems.clear();
-          });
-
-          for (var profile in profiles) {
-            userlist user = userlist.fromJson(profile);
-
-            allcards.add(user);
-            _swipeItems.add(SwipeItem(
-              content: Content(
-                text: user.firstName,
-                color: Colors.purple,
-              ),
-              likeAction: () async {
-                SharedPreferences prefs = await SharedPreferences.getInstance();
-                String? id = prefs.getString("id");
-                String? token = prefs.getString('token');
-                var response = await http.post(
-                    Uri.parse('${AppUrls.production}/api/like'),
-                    headers: {'Authorization': 'Bearer $token'},
-                    body: {
-                      "userId": id.toString(),
-                      "likedId": user.id.toString(),
-                      "super": "0"
-                    });
-
-                if (!(response.statusCode == 200)) {
-                  await http.post(Uri.parse('${AppUrls.production}/api/like'),
-                      headers: {'Authorization': 'Bearer $token'},
-                      body: {
-                        "userId": id.toString(),
-                        "likedId": user.id.toString(),
-                        "super": "0"
-                      });
-                }
-              },
-              nopeAction: () {},
-              superlikeAction: () {},
-            ));
-          }
-          if (allcards.isNotEmpty) {
-            setState(() {
-              currentUser = allcards[0];
-            });
-          }
-
-          _matchEngine = MatchEngine(swipeItems: _swipeItems);
-          setState(() {
-            showprofile = true;
-            showloader = false;
-            showReloadButton = false;
-          });
-        }
-      } else if (response.statusCode == 401) {
-        setState(() {
-          showloader = false;
-          showprofile = false;
-          showReloadButton = false;
-        });
-      } else if (response.statusCode == 201) {
-        setState(() {
-          showloader = false;
-          showprofile = false;
-          showReloadButton = false;
-        });
-        Navigator.of(context).pushNamed("/purchase");
-      } else {
-        setState(() {
-          showloader = false;
-          showprofile = false;
-          showReloadButton = true;
-        });
-      }
-    } catch (err) {
+    
+    // Force fetch new profiles when all are swiped
+    bool success = await profileProvider.fetchNewProfiles();
+    
+    if (success) {
+      _buildSwipeItemsFromProvider();
+    } else if (profileProvider.hasError) {
       setState(() {
         showloader = false;
         showprofile = false;
         showReloadButton = true;
       });
+    } else {
+      // Server returned 201 - subscription required
+      Navigator.of(context).pushNamed("/purchase");
     }
   }
 
-  Future<List<GiftsModel>> fetchMyGifts() async {
+  Future<List<UserGifts>> fetchMyGifts() async {
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
-      String? id = prefs.getString("id");
       String? token = prefs.getString("token");
       var response = await http.get(
-          Uri.parse("${AppUrls.production}/api/getusergifts/$id"),
-          headers: {'Authorization': 'Bearer $token'});
+        Uri.parse("${AppUrls.production}/api/user-gifts/"),
+        headers: {'Authorization': 'Bearer $token'},
+      );
 
       switch (response.statusCode) {
         case 200:
@@ -222,8 +380,9 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
           if (jsonResponse.containsKey('data') &&
               jsonResponse['data'] is List) {
             List<dynamic> giftsList = jsonResponse['data'];
-            List<GiftsModel> gifts =
-                giftsList.map((item) => GiftsModel.fromJson(item)).toList();
+            List<UserGifts> gifts = giftsList
+                .map((item) => UserGifts.fromJson(item))
+                .toList();
             myGifts.clear();
             setState(() {
               myGifts.addAll(gifts);
@@ -240,7 +399,7 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
     }
   }
 
-  void sendGift(GiftsModel gift) async {
+  void sendGift(UserGifts gift) async {
     try {
       setState(() {
         giftLoaderStatus = false;
@@ -251,11 +410,11 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
       var body = {
         "myid": currentUsers ?? "0",
         "user": currentUser.id ?? "0",
-        "img": gift.image,
-        "name": gift.name,
+        "img": gift.giftDetails.image ?? "",
+        "name": gift.giftDetails.name ?? "Gift",
         "qty": "1",
         "conversationId": "HOME",
-        "momentId": currentUser.id
+        "momentId": currentUser.id,
       };
       var response = await http.post(
         Uri.parse('${AppUrls.production}/api/giftpeople'),
@@ -273,19 +432,26 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
             notificationPosition: NotificationPosition.topLeft,
             animation: AnimationType.fromTop,
             title: Container(
-                child: Row(
-              children: [
-                Image.network(gift.image ?? "", height: 20, width: 20),
-                SizedBox(width: 8),
-                Text(gift.name ?? "",
+              child: Row(
+                children: [
+                  Image.network(gift.giftDetails.image ?? "", height: 20, width: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    gift.giftDetails.name ?? "",
                     style: TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.bold)),
-              ],
-            )),
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
             description: Text(
-              'You have gifted 1 ${gift.name} to ${recieverId['Names']}',
-              style:
-                  TextStyle(color: Colors.white, fontWeight: FontWeight.normal),
+              'You have gifted 1 ${gift.giftDetails.name} to ${recieverId['Names']}',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.normal,
+              ),
             ),
             onDismiss: () {},
           ).show(context);
@@ -298,7 +464,7 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
             behavior: SnackBarBehavior.floating,
             backgroundColor: Colors.transparent,
             content: FlutterSnackbarContent(
-              message: 'Insufficient ${gift.name} to gift',
+              message: 'Insufficient ${gift.giftDetails.name} to gift',
               contentType: ContentType.warning,
             ),
           );
@@ -347,7 +513,11 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
     fetchMyGifts();
   }
 
-  Widget _buildProfileCard(userlist user, int index, {bool isGridMode = false}) {
+  Widget _buildProfileCard(
+    DjangoAuthUser user,
+    int index, {
+    bool isGridMode = false,
+  }) {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
@@ -365,9 +535,11 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
           fit: StackFit.expand,
           children: [
             GestureDetector(
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                  builder: (context) =>
-                      Userprofile(userId: user.id.toString()))),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => Userprofile(userId: user.id.toString()),
+                ),
+              ),
               child: OptimizedImageLoader(
                 url: user.profilePic ?? "",
                 imageHeight: double.infinity,
@@ -419,7 +591,7 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
                     children: [
                       Flexible(
                         child: Text(
-                          user.firstName,
+                          user.firstName ?? "Unknown",
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: isGridMode ? 18 : 28,
@@ -451,9 +623,10 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
                       ),
                       SizedBox(width: 6),
                       if (context.watch<SocketProvider>().userIds.any(
-                          (socketUser) =>
-                              socketUser["userId"].toString() ==
-                              user.id.toString()))
+                        (socketUser) =>
+                            socketUser["userId"].toString() ==
+                            user.id.toString(),
+                      ))
                         Container(
                           width: isGridMode ? 8 : 12,
                           height: isGridMode ? 8 : 12,
@@ -475,12 +648,15 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
                   SizedBox(height: isGridMode ? 4 : 8),
                   Row(
                     children: [
-                      Icon(Icons.location_on,
-                          size: isGridMode ? 14 : 18, color: Colors.white70),
+                      Icon(
+                        Icons.location_on,
+                        size: isGridMode ? 14 : 18,
+                        color: Colors.white70,
+                      ),
                       SizedBox(width: 4),
                       Flexible(
                         child: Text(
-                          user.district ?? "Uganda",
+                          _getDistanceText(user),
                           style: TextStyle(
                             color: Colors.white70,
                             fontSize: isGridMode ? 12 : 16,
@@ -499,39 +675,46 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
                 ],
               ),
             ),
-            // Action buttons (only in swipe mode)
-            if (!isGridMode)
-              Positioned(
-                bottom: 16,
-                right: 16,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withOpacity(0.5),
-                        blurRadius: 15,
-                        spreadRadius: 3,
-                      ),
-                    ],
-                  ),
-                  child: IconButton(
-                    onPressed: () {
-                      Navigator.of(context).push(MaterialPageRoute(
-                        builder: (context) => FirebaseChatScreen(
-                          otherUserId: user.id.toString(),
-                          otherUserName: '${user.firstName} ${user.lastName}',
-                          otherUserProfile: user.profilePic ?? '',
-                          currentUserId: userId,
-                          currentUserName: username,
+            // Action buttons
+            Positioned(
+              bottom: isGridMode ? 8 : 16,
+              right: isGridMode ? 8 : 16,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withOpacity(0.5),
+                      blurRadius: 15,
+                      spreadRadius: 3,
+                    ),
+                  ],
+                ),
+                child: IconButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => ChatScreen(
+                          valueToPass: user.id.toString(),
+                          profile:
+                              (user.userImages != null &&
+                                  user.userImages!.isNotEmpty)
+                              ? user.userImages![Random().nextInt(
+                                  user.userImages!.length,
+                                )]
+                              : "",
+                          names: '${user.firstName} ${user.lastName}',
+                          userId: user.id.toString(),
+                          username: username,
                         ),
-                      ));
-                    },
-                    icon: Icon(Icons.chat, color: Colors.white, size: 24),
-                  ),
+                      ),
+                    );
+                  },
+                  icon: Icon(Icons.chat, color: Colors.white, size: isGridMode ? 20 : 24),
                 ),
               ),
+            ),
           ],
         ),
       ),
@@ -539,6 +722,9 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
   }
 
   Widget _buildGridView() {
+    final profileProvider = Provider.of<ProfileProvider>(context);
+    final allcards = profileProvider.profiles;
+    
     return FadeTransition(
       opacity: _fadeAnimation,
       child: allcards.isEmpty
@@ -565,13 +751,20 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
               ),
               itemCount: allcards.length,
               itemBuilder: (context, index) {
-                return _buildProfileCard(allcards[index], index, isGridMode: true);
+                return _buildProfileCard(
+                  allcards[index],
+                  index,
+                  isGridMode: true,
+                );
               },
             ),
     );
   }
 
   Widget _buildSwipeView() {
+    final profileProvider = Provider.of<ProfileProvider>(context);
+    final allcards = profileProvider.profiles;
+    
     return Container(
       height: MediaQuery.of(context).size.height * 0.6,
       width: MediaQuery.of(context).size.width * 0.9,
@@ -594,6 +787,7 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
           _loadMoreItems();
         },
         itemChanged: (SwipeItem item, int index) {
+          final allcards = Provider.of<ProfileProvider>(context, listen: false).profiles;
           if (index >= 0 && index < allcards.length) {
             setState(() {
               currentUser = allcards[index];
@@ -627,6 +821,9 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
             color: Colors.amber,
             size: 50,
             onTap: () {
+              final profileProvider = Provider.of<ProfileProvider>(context, listen: false);
+              final allcards = profileProvider.profiles;
+              
               if (BottomSheetPanel.isOpen) {
                 setState(() {
                   recieverId = {};
@@ -640,7 +837,7 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
                       "Names":
                           "${currentUser.firstName} ${currentUser.lastName}",
                       "profile": currentUser.profilePic.toString(),
-                      "momentId": currentUser.country
+                      "momentId": currentUser.id.toString(),
                     };
                   });
                   BottomSheetPanel.open();
@@ -700,6 +897,11 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final profileProvider = Provider.of<ProfileProvider>(context);
+    final allcards = profileProvider.profiles;
+    final isLoading = profileProvider.isLoading;
+    final hasError = profileProvider.hasError;
+    
     return BottomSheetScaffold(
       bottomSheet: DraggableBottomSheet(
         animationDuration: const Duration(milliseconds: 200),
@@ -732,10 +934,7 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
               SizedBox(height: 4),
               Text(
                 "to ${recieverId['Names'] ?? 'User'}",
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: Colors.white70, fontSize: 14),
               ),
               SizedBox(height: 16),
               if (myGifts.isEmpty)
@@ -744,8 +943,11 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.card_giftcard_outlined,
-                            size: 60, color: Colors.white30),
+                        Icon(
+                          Icons.card_giftcard_outlined,
+                          size: 60,
+                          color: Colors.white30,
+                        ),
                         SizedBox(height: 16),
                         Text(
                           "No gifts available",
@@ -758,7 +960,9 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
                             padding: EdgeInsets.symmetric(
-                                horizontal: 24, vertical: 12),
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(20),
                             ),
@@ -795,7 +999,7 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
                               child: Container(
                                 color: Colors.white.withOpacity(0.1),
                                 child: Image.network(
-                                  gift.image ?? "",
+                                  gift.giftDetails.image ?? "",
                                   height: 70,
                                   width: 70,
                                   fit: BoxFit.cover,
@@ -804,8 +1008,10 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
                                       height: 70,
                                       width: 70,
                                       color: Colors.grey,
-                                      child: Icon(Icons.card_giftcard,
-                                          color: Colors.white),
+                                      child: Icon(
+                                        Icons.card_giftcard,
+                                        color: Colors.white,
+                                      ),
                                     );
                                   },
                                 ),
@@ -817,7 +1023,7 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    gift.name ?? "Gift",
+                                    gift.giftDetails.name ?? "Gift",
                                     style: TextStyle(
                                       fontSize: 16,
                                       color: Colors.white,
@@ -829,11 +1035,14 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
                                     children: [
                                       Container(
                                         padding: EdgeInsets.symmetric(
-                                            horizontal: 8, vertical: 2),
+                                          horizontal: 8,
+                                          vertical: 2,
+                                        ),
                                         decoration: BoxDecoration(
                                           color: Colors.white.withOpacity(0.2),
-                                          borderRadius:
-                                              BorderRadius.circular(10),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
                                         ),
                                         child: Text(
                                           "${gift.quantity} left",
@@ -855,19 +1064,24 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
                                   : null,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.primary,
-                                disabledBackgroundColor:
-                                    AppColors.primary.withOpacity(0.5),
+                                disabledBackgroundColor: AppColors.primary
+                                    .withOpacity(0.5),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(20),
                                 ),
                                 padding: EdgeInsets.symmetric(
-                                    horizontal: 20, vertical: 12),
+                                  horizontal: 20,
+                                  vertical: 12,
+                                ),
                               ),
                               child: giftLoaderStatus
-                                  ? Text("Send",
+                                  ? Text(
+                                      "Send",
                                       style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold))
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    )
                                   : SizedBox(
                                       width: 20,
                                       height: 20,
@@ -905,7 +1119,7 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
           color: Colors.white,
         ),
         background: Colors.white,
-        title: "YoDate",
+        title: "Mazale",
         actions: [
           Container(
             height: 50,
@@ -972,7 +1186,7 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
           SizedBox(width: 10),
         ],
       ),
-      body: showloader
+      body: isLoading || showloader
           ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -982,11 +1196,7 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
                     width: 100,
                     child: LoadingIndicator(
                       indicatorType: Indicator.ballRotateChase,
-                      colors: [
-                        Colors.white,
-                        Colors.white70,
-                        Colors.white60,
-                      ],
+                      colors: [Colors.white, Colors.white70, Colors.white60],
                       strokeWidth: 2,
                     ),
                   ),
@@ -1002,271 +1212,156 @@ class _DatingState extends State<Dating> with SingleTickerProviderStateMixin {
                   SizedBox(height: 8),
                   Text(
                     "Please wait",
-                    style: TextStyle(
-                      color: Colors.white60,
-                      fontSize: 14,
-                    ),
+                    style: TextStyle(color: Colors.white60, fontSize: 14),
                   ),
                 ],
               ),
             )
-          : showReloadButton
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32.0),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: Colors.amber.withOpacity(0.2),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.error_outline,
-                            size: 80,
-                            color: Colors.amber,
-                          ),
-                        ),
-                        SizedBox(height: 24),
-                        Text(
-                          "Oops!",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        SizedBox(height: 12),
-                        Text(
-                          "Something went wrong",
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 18,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          "Unable to load profiles. Please try again.",
-                          style: TextStyle(
-                            color: Colors.white60,
-                            fontSize: 14,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        SizedBox(height: 40),
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.amber,
-                            foregroundColor: Colors.black,
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 32, vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30),
-                            ),
-                            elevation: 5,
-                          ),
-                          onPressed: _loadMoreItems,
-                          icon: Icon(Icons.refresh, size: 24),
-                          label: Text(
-                            'Reload',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
+          : hasError || showReloadButton
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withOpacity(0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.error_outline,
+                        size: 80,
+                        color: Colors.amber,
+                      ),
                     ),
-                  ),
-                )
-              : showprofile
-                  ? _viewMode == ViewMode.swipe
-                      ? SingleChildScrollView(
-                          child: Column(
-                            children: [
-                              SizedBox(height: 20),
-                              _buildSwipeView(),
-                              SizedBox(height: 20),
-                              _buildActionButtons(),
-                              SizedBox(height: 20),
-                            ],
-                          ),
-                        )
-                      : Container(
-                          height: MediaQuery.of(context).size.height - 120,
-                          child: _buildGridView(),
-                        )
-                  : Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(32.0),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(20),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.1),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                Icons.people_outline,
-                                size: 80,
-                                color: Colors.white30,
-                              ),
-                            ),
-                            SizedBox(height: 24),
-                            Text(
-                              "No profiles available",
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            SizedBox(height: 12),
-                            Text(
-                              "Check back later for new matches",
-                              style: TextStyle(
-                                color: Colors.white60,
-                                fontSize: 16,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                            SizedBox(height: 32),
-                            ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primary,
-                                padding: EdgeInsets.symmetric(
-                                    horizontal: 28, vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(30),
-                                ),
-                              ),
-                              onPressed: _loadMoreItems,
-                              icon: Icon(Icons.refresh, color: Colors.white),
-                              label: Text(
-                                'Refresh',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
+                    SizedBox(height: 24),
+                    Text(
+                      "Oops!",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: 12),
+                    Text(
+                      "Something went wrong",
+                      style: TextStyle(color: Colors.white70, fontSize: 18),
+                      textAlign: TextAlign.center,
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      "Unable to load profiles. Please try again.",
+                      style: TextStyle(color: Colors.white60, fontSize: 14),
+                      textAlign: TextAlign.center,
+                    ),
+                    SizedBox(height: 40),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.amber,
+                        foregroundColor: Colors.black,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 32,
+                          vertical: 16,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        elevation: 5,
+                      ),
+                      onPressed: _loadMoreItems,
+                      icon: Icon(Icons.refresh, size: 24),
+                      label: Text(
+                        'Reload',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
-    );
-  }
-}
-
-class userlist {
-  final String id;
-  final String firstName;
-  final String lastName;
-  final String? day;
-  final String? month;
-  final String year;
-  final String? country;
-  final String? district;
-  final String? village;
-  final String profilePic;
-  final String? online;
-  final String gender;
-  final String? hopes;
-  final String? religion;
-  final String? imgx;
-  final String? imgxx;
-  final String? imgxxx;
-  final String? imgxxxx;
-  final String? referalCode;
-  final String loginId;
-  final String contact;
-  final String twitter;
-  final String instagram;
-  final String facebook;
-  final String email;
-  final String about;
-  final bool promoted;
-  final String subscription;
-  final String endSubscription;
-  final int totalShows;
-  final String? promoterUrl;
-  final List<String> userImages;
-
-  userlist({
-    required this.id,
-    required this.firstName,
-    required this.lastName,
-    this.day,
-    this.month,
-    required this.year,
-    this.country,
-    this.district,
-    this.village,
-    required this.profilePic,
-    this.online,
-    required this.gender,
-    this.hopes,
-    this.religion,
-    this.imgx,
-    this.imgxx,
-    this.imgxxx,
-    this.imgxxxx,
-    this.referalCode,
-    required this.loginId,
-    required this.contact,
-    required this.twitter,
-    required this.instagram,
-    required this.facebook,
-    required this.email,
-    required this.about,
-    required this.promoted,
-    required this.subscription,
-    required this.endSubscription,
-    required this.totalShows,
-    this.promoterUrl,
-    required this.userImages,
-  });
-
-  factory userlist.fromJson(Map<String, dynamic> json) {
-    return userlist(
-      id: json['id'].toString(),
-      firstName: json['FirstName'] ?? 'Unknown',
-      lastName: json['LastName'] ?? '',
-      day: json['day'],
-      month: json['month'],
-      year: json['year'] ?? '2000',
-      country: json['Country'],
-      district: json['District'] ?? "Uganda",
-      village: json['Village'],
-      profilePic: json['Profilepic'] ?? '',
-      online: json['online'],
-      gender: json['Gender'] ?? 'Other',
-      hopes: json['hopes'],
-      religion: json['religion'],
-      imgx: json['imgx'],
-      imgxx: json['imgxx'],
-      imgxxx: json['imgxxx'],
-      imgxxxx: json['imgxxxx'],
-      referalCode: json['referalCode'],
-      loginId: json['loginId'].toString(),
-      contact: json['contact'] ?? '',
-      twitter: json['twitter'] ?? '',
-      instagram: json['instagram'] ?? '',
-      facebook: json['facebook'] ?? '',
-      email: json['email'] ?? '',
-      about: json['about'] ?? '',
-      promoted: json['promoted'] ?? false,
-      subscription: json['subscription'] ?? '',
-      endSubscription: json['endsubscription'] ?? '',
-      totalShows: json['totalshows'] ?? 0,
-      promoterUrl: json['promoterurl'],
-      userImages: List<String>.from(json['userImages'] ?? []),
+                  ],
+                ),
+              ),
+            )
+          : allcards.isNotEmpty
+          ? _viewMode == ViewMode.swipe
+                ? SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        SizedBox(height: 20),
+                        _buildSwipeView(),
+                        SizedBox(height: 20),
+                        _buildActionButtons(),
+                        SizedBox(height: 20),
+                      ],
+                    ),
+                  )
+                : Container(
+                    height: MediaQuery.of(context).size.height - 120,
+                    child: _buildGridView(),
+                  )
+          : Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.people_outline,
+                        size: 80,
+                        color: Colors.white30,
+                      ),
+                    ),
+                    SizedBox(height: 24),
+                    Text(
+                      "No profiles available",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: 12),
+                    Text(
+                      "Check back later for new matches",
+                      style: TextStyle(color: Colors.white60, fontSize: 16),
+                      textAlign: TextAlign.center,
+                    ),
+                    SizedBox(height: 32),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 28,
+                          vertical: 14,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                      ),
+                      onPressed: _loadMoreItems,
+                      icon: Icon(Icons.refresh, color: Colors.white),
+                      label: Text(
+                        'Refresh',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
     );
   }
 }

@@ -2,11 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_snackbar_content/flutter_snackbar_content.dart';
-import 'package:easingles/Components/Toolbar.dart';
-import 'package:easingles/Models/GiftsMode.dart';
-import 'package:easingles/assets/app.colors.dart';
-import 'package:easingles/assets/urlconfig.dart';
-import 'package:easingles/styles/app.text.dart';
+import 'package:mazale/Components/Toolbar.dart';
+import 'package:mazale/Models/GiftsMode.dart';
+import 'package:mazale/assets/app.colors.dart';
+import 'package:mazale/assets/urlconfig.dart';
+import 'package:mazale/styles/app.text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 
@@ -158,7 +158,7 @@ class _ConfirmwithdrawState extends State<Confirmwithdraw> {
                 ),
                 TextField(
                   controller: phoneNumberController,
-                  keyboardType: TextInputType.phone,
+                  keyboardType: TextInputType.number,
                   decoration: InputDecoration(
                       labelText: "Enter number to redeem",
                       filled: true,

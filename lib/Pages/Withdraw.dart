@@ -2,13 +2,13 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:easingles/Components/Toolbar.dart';
-import 'package:easingles/Models/GiftsMode.dart';
-import 'package:easingles/Pages/Buy.dart';
-import 'package:easingles/Pages/Confirmwithdraw.dart';
-import 'package:easingles/assets/app.colors.dart';
-import 'package:easingles/assets/urlconfig.dart';
-import 'package:easingles/styles/app.text.dart';
+import 'package:mazale/Components/Toolbar.dart';
+import 'package:mazale/Models/GiftsMode.dart';
+import 'package:mazale/Pages/Buy.dart';
+import 'package:mazale/Pages/Confirmwithdraw.dart';
+import 'package:mazale/assets/app.colors.dart';
+import 'package:mazale/assets/urlconfig.dart';
+import 'package:mazale/styles/app.text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class Giftsdetails {

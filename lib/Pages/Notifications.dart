@@ -1,8 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:easingles/assets/app.colors.dart';
-import 'package:easingles/assets/urlconfig.dart';
+import 'package:mazale/assets/app.colors.dart';
+import 'package:mazale/assets/urlconfig.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';

@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_snackbar_content/flutter_snackbar_content.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:easingles/assets/urlconfig.dart';
+import 'package:mazale/assets/urlconfig.dart';
 import 'package:http/http.dart' as http;
 
 class RegisterProvider extends ChangeNotifier {
@@ -24,6 +24,21 @@ class RegisterProvider extends ChangeNotifier {
     return true;
   }
 
+  Future<bool> addDataToDb(
+    String phoneNumber,
+    String firstname,
+    String lastname,
+    String passcode,
+  ) async {
+    phoneNumber = phoneNumber;
+    firstname = firstname;
+    lastname = lastname;
+    passcode = passcode;
+
+    notifyListeners();
+    return true;
+  }
+
   Future<bool> sendotp(String phonenumber, BuildContext context) async {
     try {
       const snackBar = SnackBar(
@@ -35,17 +50,6 @@ class RegisterProvider extends ChangeNotifier {
           contentType: ContentType.failure,
         ),
       );
-      print('...................................................');
-      print('...................................................');
-      print('...................................................');
-      print('...................................................');
-      print('...................................................');
-      print('...................................................');
-      print('...................................................');
-      print('...................................................');
-      print('...................................................');
-      print('...................................................');
-      print('...................................................');
 
       var response = await http.post(
         Uri.parse("${AppUrls.production}/api/generateotp"),
@@ -342,43 +346,35 @@ class RegisterProvider extends ChangeNotifier {
     }
   }
 
+  
+
   Future<bool> registration(List<File?> userImages) async {
-    List<List<int>> imageBytesList = await Future.wait(
-      userImages.map((image) async {
-        if (image != null) {
-          return await image.readAsBytes();
-        } else {
-          return <int>[];
-        }
-      }),
-    );
-    var request = http.MultipartRequest(
-      'POST',
-      Uri.parse('${AppUrls.production}/api/uploadimages'),
-    );
+    String images = '';
 
-    request.fields['phoneNumber'] = this.phoneNumber;
-    request.fields['gender'] = gender;
-    request.fields['firstname'] = firstname;
-    request.fields['lastname'] = lastname;
-    request.fields['dateofbirth'] = dateofbirth.toIso8601String();
-    request.fields['passcode'] = this.passcode;
-    for (int i = 0; i < imageBytesList.length; i++) {
-      request.files.add(
-        http.MultipartFile.fromBytes(
-          'userImages',
-          imageBytesList[i],
-          filename: '$firstname$lastname$i.jpg',
-        ),
-      );
-    }
+    // TODO: Implement image upload to Django backend or another service
 
+      var payload = {
+        'phoneNumber': this.phoneNumber,
+        'gender': this.gender ?? "",
+        'firstname': this.firstname ?? "",
+        'lastname': this.lastname ?? "",
+        'dateofbirthid': this.dateofbirth.toIso8601String() ?? "",
+        'passcode': passcode ?? "",
+        'images': images,
+      };
     try {
-      var response = await request.send();
+    
+      print(payload);
+      var response = await http.post(
+        Uri.parse("${AppUrls.production}/api/uploadimages"),
+        body: payload,
+      );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return true;
       } else {
+
+
         print(
           'Failed to submit registration. Status code: ${response.statusCode}',
         );

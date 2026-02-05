@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_snackbar_content/flutter_snackbar_content.dart';
-import 'package:easingles/Pages/Login_page.dart';
-import 'package:easingles/Provider/RegisterProvider.dart';
-import 'package:easingles/assets/app.colors.dart';
-import 'package:easingles/styles/app.text.dart';
+import 'package:mazale/Pages/Login_page.dart';
+import 'package:mazale/Provider/RegisterProvider.dart';
+import 'package:mazale/assets/app.colors.dart';
+import 'package:mazale/styles/app.text.dart';
 import 'package:otp_text_field/otp_field.dart';
 import 'package:otp_text_field/otp_field_style.dart';
 import 'package:otp_text_field/style.dart';
@@ -227,7 +227,7 @@ class _ForgotPassState extends State<ForgotPass> {
                         child: TextFormField(
                           obscureText: false,
                           controller: phonecontroller,
-                          keyboardType: TextInputType.phone,
+                          keyboardType: TextInputType.number,
                           decoration: InputDecoration(
                             labelText: "Phone Number i.e. 078... or 075...",
                             border: OutlineInputBorder(

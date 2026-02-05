@@ -2,17 +2,21 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:easingles/Components/AppButton.dart';
-import 'package:easingles/Components/Gallery.dart';
-import 'package:easingles/Components/PostItems.dart';
-import 'package:easingles/Components/Profile.dart';
-import 'package:easingles/Components/Profile_images.dart';
-import 'package:easingles/Components/Toolbar.dart';
-import 'package:easingles/Pages/Login_page.dart';
-import 'package:easingles/assets/app.colors.dart';
-import 'package:easingles/assets/urlconfig.dart';
-import 'package:easingles/styles/app.text.dart';
+import 'package:mazale/Components/AppButton.dart';
+import 'package:mazale/Components/Gallery.dart';
+import 'package:mazale/Components/PostItems.dart';
+import 'package:mazale/Components/Profile.dart';
+import 'package:mazale/Components/Profile_images.dart';
+import 'package:mazale/Components/Toolbar.dart';
+import 'package:mazale/Pages/Login_page.dart';
+import 'package:mazale/Provider/SocketProvider.dart';
+import 'package:mazale/assets/app.colors.dart';
+import 'package:mazale/assets/urlconfig.dart';
+import 'package:mazale/styles/app.text.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 enum Popmenuaction {
   edit,
@@ -86,24 +90,89 @@ class _ProfilepageState extends State<Profilepage> {
   }
 
   void Likeuser() async {
-    // Handle like action without showing SnackBar
-    // SharedPreferences prefs = await SharedPreferences.getInstance();
-    // String? id = prefs.getString("id");
-    // print("making that request");
-    // var response = await http.post(Uri.parse('${AppUrls.production}/api/like'),
-    //     body: {
-    //       "userId": id.toString(),
-    //       "likedId": profile['id'].toString(),
-    //       "super": "0"
-    //     });
-    // if (!(response.statusCode == 200)) {
-    //   var response = await http.post(Uri.parse('${AppUrls.production}/api/like'),
-    //       body: {
-    //         "userId": id.toString(),
-    //         "likedId": profile['id'].toString(),
-    //         "super": "0"
-    //       });
-    // }
+  }
+
+  Future<void> _handleLogout() async {
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: Colors.amber),
+      ),
+    );
+
+    try {
+      // Disconnect socket first
+      Provider.of<SocketProvider>(context, listen: false).disconnect();
+      
+      // Get stored credentials
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      String? loginId = prefs.getString('id');
+      String? token = prefs.getString('token');
+      
+      // Call backend logout endpoint to invalidate tokens
+      if (loginId != null && token != null) {
+        try {
+          var logoutUrl = Uri.parse('${AppUrls.production}/api/auth/logout');
+          await http.post(
+            logoutUrl,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token'
+            },
+            body: jsonEncode({'loginId': loginId}),
+          );
+        } catch (e) {
+          // Continue with logout even if backend call fails
+          print('Backend logout error: $e');
+        }
+      }
+      
+      // Sign out from Firebase (for Google login users)
+      try {
+        await GoogleSignIn.instance.signOut();
+        await FirebaseAuth.instance.signOut();
+      } catch (e) {
+        // Continue with logout even if Firebase sign-out fails
+        print('Firebase sign-out error: $e');
+      }
+      
+      // Clear all SharedPreferences
+      await prefs.clear();
+      
+      // Close the loading dialog
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+      
+      // Navigate to login page and remove all previous routes
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => Login_page()),
+          (Route<dynamic> route) => false,
+        );
+      }
+    } catch (e) {
+      // Close the loading dialog on error
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+      print('Logout error: $e');
+      
+      // Still clear local data and navigate to login
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+      
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => Login_page()),
+          (Route<dynamic> route) => false,
+        );
+      }
+    }
   }
 
   List<Widget> mymoments() {
@@ -169,10 +238,9 @@ class _ProfilepageState extends State<Profilepage> {
             child: Text(
               userlist[0].userinterests[i].toString() ?? "No interests,",
               style: TextStyle(
-                fontSize: 16.0, // Adjust the font size
-                fontWeight: FontWeight.normal, // Adjust the font weight
-                color: Colors.white, // Adjust the text color
-                // Add more style properties as needed
+                fontSize: 16.0,
+                fontWeight: FontWeight.normal,
+                color: Colors.white,
               ),
             ),
           ),
@@ -191,10 +259,9 @@ class _ProfilepageState extends State<Profilepage> {
             child: Text(
               "No interests,",
               style: TextStyle(
-                fontSize: 16.0, // Adjust the font size
-                fontWeight: FontWeight.normal, // Adjust the font weight
-                color: Colors.white, // Adjust the text color
-                // Add more style properties as needed
+                fontSize: 16.0,
+                fontWeight: FontWeight.normal,
+                color: Colors.white,
               ),
             ),
           ),
@@ -216,61 +283,43 @@ class _ProfilepageState extends State<Profilepage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: Toolbar(
-        title: "Profile ${userlist.length.toString()}",
+        title: "Profile",
         background: Color.fromARGB(255, 97, 119, 161),
         actions: [
-          PopupMenuButton(itemBuilder: (context) {
-            onSelected:
-            (value) async {
+          PopupMenuButton<Popmenuaction>(
+            onSelected: (value) async {
               switch (value) {
                 case Popmenuaction.edit:
-                  print("Logging out section 1");
+                  Navigator.of(context).pushNamed('/edit');
                   break;
                 case Popmenuaction.logout:
+                  _handleLogout();
                   break;
-                default:
               }
-            };
-            return [
+            },
+            itemBuilder: (context) => [
               PopupMenuItem(
-                onTap: () {
-                  Navigator.of(context).pushNamed('/edit');
-                },
                 child: Row(
                   children: [
-                    Icon(Icons.edit),
-                    SizedBox(
-                      width: 10,
-                    ),
-                    Text("Edit"),
+                    Icon(Icons.edit, color: Colors.white),
+                    SizedBox(width: 10),
+                    Text("Edit Profile", style: TextStyle(color: Colors.white)),
                   ],
                 ),
                 value: Popmenuaction.edit,
               ),
               PopupMenuItem(
-                onTap: () async {
-                  print("Tapped this");
-                  SharedPreferences prefs =
-                      await SharedPreferences.getInstance();
-                  await prefs.clear();
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (context) => Login_page()),
-                  );
-                },
                 child: Row(
                   children: [
-                    Icon(Icons.logout_rounded),
-                    SizedBox(
-                      width: 10,
-                    ),
-                    Text("logout"),
+                    Icon(Icons.logout_rounded, color: Colors.red),
+                    SizedBox(width: 10),
+                    Text("Logout", style: TextStyle(color: Colors.red)),
                   ],
                 ),
                 value: Popmenuaction.logout,
               )
-            ];
-          })
+            ],
+          )
         ],
       ),
       body: SingleChildScrollView(
@@ -294,7 +343,7 @@ class _ProfilepageState extends State<Profilepage> {
                           height: 150,
                           width: 150,
                           fit: BoxFit
-                              .cover, // You can add this line to ensure the image covers the entire space
+                              .cover,
                         ),
                       )
                     ],
@@ -339,8 +388,8 @@ class _ProfilepageState extends State<Profilepage> {
                         horizontal: 20, vertical: 10),
                     child: Wrap(
                       spacing:
-                          8.0, // Adjust the spacing between items as needed
-                      runSpacing: 8.0, // Adjust the run spacing as needed
+                          8.0,
+                      runSpacing: 8.0,
                       children: [...myinterests()],
                     ),
                   ),
@@ -381,22 +430,22 @@ class UserData {
   int id;
   String firstName;
   String lastName;
-  DateTime? day; // You may adjust the type based on the actual data
-  DateTime? month; // You may adjust the type based on the actual data
+  DateTime? day;
+  DateTime? month;
   DateTime? year;
   String? country;
   String? district;
-  String? village; // You may adjust the type based on the actual data
+  String? village;
   String? profilePic;
-  bool? online; // You may adjust the type based on the actual data
+  bool? online;
   String gender;
-  String? hopes; // You may adjust the type based on the actual data
-  String? religion; // You may adjust the type based on the actual data
-  String? imgx; // You may adjust the type based on the actual data
-  String? imgxx; // You may adjust the type based on the actual data
-  String? imgxxx; // You may adjust the type based on the actual data
-  String? imgxxxx; // You may adjust the type based on the actual data
-  String? referralCode; // You may adjust the type based on the actual data
+  String? hopes;
+  String? religion;
+  String? imgx;
+  String? imgxx;
+  String? imgxxx;
+  String? imgxxxx;
+  String? referralCode;
   int loginId;
   String? contact;
   String? twitter;
@@ -411,7 +460,7 @@ class UserData {
   String? promoterUrl;
   List<dynamic> userimages;
   List<dynamic>
-      userinterests; // You may adjust the type based on the actual data
+      userinterests;
 
   UserData(
       {required this.id,

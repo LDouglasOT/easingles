@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:gif_view/gif_view.dart';
-import 'package:easingles/assets/app.colors.dart';
+import 'package:mazale/assets/app.colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 
@@ -18,274 +18,156 @@ class _IntroState extends State<Intro> {
   @override
   void initState() {
     super.initState();
-    // _controllerx = FlutterGifController(vsync: this);
   }
 
-  Widget FirstPage() {
+  Widget _buildPage({
+    required String gifPath,
+    required String title,
+    required bool isLastPage,
+  }) {
     return Scaffold(
       body: Container(
         color: Colors.white,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 20),
-              child: Text(
-                "Welcome to ..YoDate... Uganda's #1 premier dating app",
-                style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.lighter),
-              ),
-            ),
-            GifView.asset(
-              'lib/assets/images/Onlinedating-animated.gif',
-              width: MediaQuery.of(context)
-                  .size
-                  .width, // 90% of the device's width
-              height: MediaQuery.of(context).size.height *
-                  0.6, // 60% of the device's height
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxHeight,
+                  ),
+                  child: IntrinsicHeight(
+                    child: Column(
+                      children: [
+                        // GIF Section
+                        GifView.asset(
+                          gifPath,
+                          width: MediaQuery.of(context).size.width,
+                          height: MediaQuery.of(context).size.height * 0.45,
+                          frameRate: 30,
+                        ),
 
-              frameRate: 30, // default is 15 FPS
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                TextButton(
-                    onPressed: () {
-                      _pageController.animateToPage(
-                          _currentPageIndex == 0
-                              ? _currentPageIndex
-                              : _currentPageIndex - 1,
-                          duration: Duration(milliseconds: 400),
-                          curve: Curves.easeInOut);
-                    },
-                    child: Text(
-                      "Prev",
-                      style: TextStyle(
-                          color: AppColors.lighter,
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold),
-                    )),
-                TextButton(
-                  onPressed: () {
-                    _pageController.animateToPage(_currentPageIndex + 1,
-                        duration: Duration(milliseconds: 400),
-                        curve: Curves.easeInOut);
-                  },
-                  child: Text(
-                    "Next",
-                    style: TextStyle(
-                        color: AppColors.lighter,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold),
+                        // Title Section
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20.0,
+                              vertical: 20.0,
+                            ),
+                            child: Center(
+                              child: Text(
+                                title,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: MediaQuery.of(context).size.width * 0.06,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.lighter,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        // Navigation Buttons
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20.0,
+                            vertical: 20.0,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              TextButton(
+                                onPressed: _currentPageIndex == 0
+                                    ? null
+                                    : () {
+                                        _pageController.animateToPage(
+                                          _currentPageIndex - 1,
+                                          duration: Duration(milliseconds: 400),
+                                          curve: Curves.easeInOut,
+                                        );
+                                      },
+                                child: Text(
+                                  "Prev",
+                                  style: TextStyle(
+                                    color: _currentPageIndex == 0
+                                        ? AppColors.lighter.withOpacity(0.3)
+                                        : AppColors.lighter,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () async {
+                                  if (isLastPage) {
+                                    SharedPreferences prefs =
+                                        await SharedPreferences.getInstance();
+                                    await prefs.setString('intro', "intro");
+                                    Navigator.of(context)
+                                        .pushReplacementNamed('/login');
+                                  } else {
+                                    _pageController.animateToPage(
+                                      _currentPageIndex + 1,
+                                      duration: Duration(milliseconds: 400),
+                                      curve: Curves.easeInOut,
+                                    );
+                                  }
+                                },
+                                child: Text(
+                                  isLastPage ? "Finish" : "Next",
+                                  style: TextStyle(
+                                    color: AppColors.lighter,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ],
-            )
-          ],
+              );
+            },
+          ),
         ),
       ),
+    );
+  }
+
+  Widget FirstPage() {
+    return _buildPage(
+      gifPath: 'lib/assets/images/Onlinedating-animated.gif',
+      title: "Welcome to Mazale\nUganda's #1 premier dating app",
+      isLastPage: false,
     );
   }
 
   Widget SecondPage() {
-    return Scaffold(
-      body: Container(
-        color: Colors.white,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 20),
-              child: Text(
-                "Meet New People near you or globally instantly",
-                style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.lighter),
-              ),
-            ),
-            GifView.asset(
-              'lib/assets/images/meet.gif',
-              width: MediaQuery.of(context)
-                  .size
-                  .width, // 90% of the device's width
-              height: MediaQuery.of(context).size.height *
-                  0.6, // 60% of the device's height
-
-              frameRate: 30, // default is 15 FPS
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                TextButton(
-                    onPressed: () {
-                      _pageController.animateToPage(
-                          _currentPageIndex == 0
-                              ? _currentPageIndex
-                              : _currentPageIndex - 1,
-                          duration: Duration(milliseconds: 400),
-                          curve: Curves.easeInOut);
-                    },
-                    child: Text(
-                      "Prev",
-                      style: TextStyle(
-                          color: AppColors.lighter,
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold),
-                    )),
-                TextButton(
-                  onPressed: () {
-                    _pageController.animateToPage(_currentPageIndex + 1,
-                        duration: Duration(milliseconds: 400),
-                        curve: Curves.easeInOut);
-                  },
-                  child: Text(
-                    "Next",
-                    style: TextStyle(
-                        color: AppColors.lighter,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            )
-          ],
-        ),
-      ),
+    return _buildPage(
+      gifPath: 'lib/assets/images/meet.gif',
+      title: "Meet New People near you or globally instantly",
+      isLastPage: false,
     );
   }
 
-Widget ThirdPage() {
-    return Scaffold(
-      body: Container(
-        color: Colors.white,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 20),
-              child: Text(
-                "Share your love and gifts redeemable via mobile money",
-                style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.lighter),
-              ),
-            ),
-            GifView.asset(
-              'lib/assets/images/Onlinedating-animated-xx.gif',
-              width: MediaQuery.of(context)
-                  .size
-                  .width, // 90% of the device's width
-              height: MediaQuery.of(context).size.height *
-                  0.6, // 60% of the device's height
-
-              frameRate: 30, // default is 15 FPS
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                TextButton(
-                    onPressed: () {
-                      _pageController.animateToPage(
-                          _currentPageIndex == 0
-                              ? _currentPageIndex
-                              : _currentPageIndex - 1,
-                          duration: Duration(milliseconds: 400),
-                          curve: Curves.easeInOut);
-                    },
-                    child: Text(
-                      "Prev",
-                      style: TextStyle(
-                          color: AppColors.lighter,
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold),
-                    )),
-                TextButton(
-                  onPressed: () {
-                    _pageController.animateToPage(_currentPageIndex + 1,
-                        duration: Duration(milliseconds: 400),
-                        curve: Curves.easeInOut);
-                  },
-                  child: Text(
-                    "Next",
-                    style: TextStyle(
-                        color: AppColors.lighter,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            )
-          ],
-        ),
-      ),
+  Widget ThirdPage() {
+    return _buildPage(
+      gifPath: 'lib/assets/images/Onlinedating-animated-xx.gif',
+      title: "Share your love and gifts redeemable via mobile money",
+      isLastPage: false,
     );
   }
 
-Widget FourthPage() {
-    return Scaffold(
-      body: Container(
-        color: Colors.white,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 20),
-              child: Text(
-                "Share your love, feeling and chat with potential partners",
-                style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.lighter),
-              ),
-            ),
-            GifView.asset(
-              'lib/assets/images/Onlinedating-animated-x.gif',
-              width: MediaQuery.of(context)
-                  .size
-                  .width, // 90% of the device's width
-              height: MediaQuery.of(context).size.height *
-                  0.6, // 60% of the device's height
-
-              frameRate: 30, // default is 15 FPS
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                TextButton(
-                    onPressed: () {
-                      _pageController.animateToPage(
-                          _currentPageIndex == 0
-                              ? _currentPageIndex
-                              : _currentPageIndex - 1,
-                          duration: Duration(milliseconds: 400),
-                          curve: Curves.easeInOut);
-                    },
-                    child: Text(
-                      "Prev",
-                      style: TextStyle(
-                          color: AppColors.lighter,
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold),
-                    )),
-                TextButton(
-                  onPressed: ()async {
-                   SharedPreferences prefs = await SharedPreferences.getInstance();
-                  await prefs.setString('intro', "intro");  
-                  Navigator.of(context).pushReplacementNamed('/login');      
-                  },
-                  child: Text(
-                    "Finish",
-                    style: TextStyle(
-                        color: AppColors.lighter,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            )
-          ],
-        ),
-      ),
+  Widget FourthPage() {
+    return _buildPage(
+      gifPath: 'lib/assets/images/Onlinedating-animated-x.gif',
+      title: "Share your love, feeling and chat with potential partners",
+      isLastPage: true,
     );
   }
 
@@ -295,6 +177,7 @@ Widget FourthPage() {
       appBar: AppBar(
         title: Text(""),
         backgroundColor: Colors.white,
+        elevation: 0,
       ),
       body: PageView(
         controller: _pageController,
@@ -307,31 +190,31 @@ Widget FourthPage() {
           FirstPage(),
           SecondPage(),
           ThirdPage(),
-          FourthPage()
+          FourthPage(),
         ],
-      
       ),
       bottomNavigationBar: Container(
-        color:Colors.white,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 18),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              SmoothPageIndicator(
-                    controller: _pageController,
-                    count: 4,
-                    effect: ScrollingDotsEffect(
-                      activeDotColor: Colors.amber,
-                    ),
-                    
+        color: Colors.white,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SmoothPageIndicator(
+                  controller: _pageController,
+                  count: 4,
+                  effect: ScrollingDotsEffect(
+                    activeDotColor: Colors.amber,
+                    dotHeight: 8,
+                    dotWidth: 8,
                   ),
-            ],
+                ),
+              ],
+            ),
           ),
         ),
-      ), 
+      ),
     );
   }
 }
-
-

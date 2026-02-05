@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:easingles/assets/app.colors.dart';
+import 'package:mazale/assets/app.colors.dart';
 
 // Country code data structure
 class CountryCode {

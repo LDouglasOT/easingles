@@ -1,14 +1,13 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_form_builder/flutter_form_builder.dart';
-import 'package:easingles/Components/Profile.dart';
-import 'package:easingles/Components/Text_input.dart';
-import 'package:easingles/Components/Toolbar.dart';
-import 'package:easingles/Pages/Profilepage.dart';
-import 'package:easingles/assets/app.colors.dart';
-import 'package:easingles/assets/urlconfig.dart';
-import 'package:easingles/styles/app.text.dart';
+import 'package:mazale/Components/Profile.dart';
+import 'package:mazale/Components/Text_input.dart';
+import 'package:mazale/Components/Toolbar.dart';
+import 'package:mazale/Pages/Profilepage.dart';
+import 'package:mazale/assets/app.colors.dart';
+import 'package:mazale/assets/urlconfig.dart';
+import 'package:mazale/styles/app.text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 

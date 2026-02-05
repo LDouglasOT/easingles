@@ -1,169 +1,202 @@
-import 'package:easingles/Pages/Moments.dart';
 import 'package:flutter/material.dart';
-import 'package:easingles/Pages/ChatScreen.dart';
-import 'package:easingles/assets/app.colors.dart';
-import 'package:easingles/styles/app.text.dart';
-import 'package:loading_indicator/loading_indicator.dart';
-import 'package:optimized_image_loader/optimized_image_loader.dart';
-import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:mazale/assets/app.colors.dart';
+import 'package:timeago/timeago.dart' as timeago;
 
 class Chatpill extends StatelessWidget {
-  String messages;
-  String avatar;
-  String names;
-  String newvcount;
-  bool status;
-  String cuid;
-  Chatpill(
-      {super.key,
-      required this.messages,
-      required this.avatar,
-      required this.names,
-      required this.newvcount,
-      required this.status,
-      required this.cuid});
+  final String messages;
+  final String avatar;
+  final String names;
+  final String newvcount;
+  final bool status;
+  final String cuid;
+  final DateTime? timestamp;
+  final VoidCallback? onAvatarTap;
+  final VoidCallback? onTap;
+
+  const Chatpill({
+    Key? key,
+    required this.messages,
+    required this.avatar,
+    required this.names,
+    required this.newvcount,
+    required this.status,
+    required this.cuid,
+    this.timestamp,
+    this.onAvatarTap,
+    this.onTap,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 0, 0, 0),
-      child: GestureDetector(
-        onTap: () async {
-          SharedPreferences pref = await SharedPreferences.getInstance();
-          String? currentUserId = pref.getString("id") ?? "0";
-          String? currentUserName = pref.getString("name") ?? "You";
+    final unreadCount = int.tryParse(newvcount) ?? 0;
+    final hasUnread = unreadCount > 0;
 
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => FirebaseChatScreen(
-                otherUserId: cuid,
-                otherUserName: names,
-                otherUserProfile: avatar,
-                currentUserId: currentUserId,
-                currentUserName: currentUserName,
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: hasUnread ? AppColors.background : Colors.transparent,
+        ),
+        child: Row(
+          children: [
+            // Avatar with online indicator
+            GestureDetector(
+              onTap: onAvatarTap,
+              child: Stack(
+                children: [
+                  CircleAvatar(
+                    radius: 28,
+                    backgroundColor: Colors.grey[300],
+                    backgroundImage: avatar.isNotEmpty
+                        ? NetworkImage(avatar)
+                        : null,
+                    child: avatar.isEmpty
+                        ? Text(
+                            _getInitials(names),
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          )
+                        : null,
+                  ),
+                  if (status)
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        width: 16,
+                        height: 16,
+                        decoration: BoxDecoration(
+                          color: Colors.green,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: AppColors.background,
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
-          );
-        },
-        child: Container(
-            height: 80,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(0),
-            ),
-            width: double.infinity,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(4.0),
-                          child: Container(
-                            height: 55,
-                            width: 55,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.2),
-                                  spreadRadius: 2,
-                                  blurRadius: 5,
-                                  offset: Offset(0, 3),
-                                ),
-                              ],
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(150),
-                              child: OptimizedImageLoader(
-                                url: avatar,
-                                imageHeight: 100,
-                                imageWidth: 100,
-                                spinnerHeight: 35,
-                                spinnerWidth: 35,
-                                loadingIndicator: const LoadingIndicator(
-                                  indicatorType: Indicator.lineScaleParty,
-                                ),
-                                errorContainerDecoration: BoxDecoration(
-                                  color: Colors.orange,
-                                  borderRadius: BorderRadius.circular(150),
-                                ),
-                                errorContainerChild: Image.network(avatar),
-                              ),
+            const SizedBox(width: 12),
+            // Message content
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          names,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: hasUnread
+                                ? FontWeight.bold
+                                : FontWeight.w500,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (timestamp != null)
+                        Text(
+                          _formatTime(timestamp!),
+                          style: TextStyle(
+                            color: hasUnread
+                                ? Colors.amber
+                                : Colors.white54,
+                            fontSize: 12,
+                            fontWeight: hasUnread
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          messages,
+                          style: TextStyle(
+                            color: hasUnread
+                                ? Colors.white
+                                : Colors.white70,
+                            fontSize: 14,
+                            fontWeight: hasUnread
+                                ? FontWeight.w500
+                                : FontWeight.normal,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (hasUnread) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.amber,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            unreadCount > 99 ? '99+' : newvcount,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
                       ],
-                    ),
-                    Align(
-                      alignment: Alignment.topCenter,
-                      child: SizedBox(
-                        child: Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: Column(
-                              mainAxisAlignment: MainAxisAlignment.start,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(names,
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                    )),
-                                Text(
-                                  messages,
-                                  style: TextStyle(
-                                      overflow: TextOverflow.ellipsis,
-                                      fontSize: 15,
-                                      color:
-                                          Color.fromARGB(255, 221, 221, 221)),
-                                )
-                              ]),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                Align(
-                  alignment: Alignment.bottomLeft,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      // Padding(
-                      //   padding: const EdgeInsets.fromLTRB(0, 0, 15, 4),
-                      //   child: Text(
-                      //     context.watch<FirebaseChatProvider>().onlineUserIds.contains(cuid)
-                      //         ? "online"
-                      //         : "offline",
-                      //     style: TextStyle(color: Colors.white),
-                      //   ),
-                      // ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(0, 0, 20, 0),
-                        child: Container(
-                            height: 23,
-                            width: 23,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(100),
-                              color: AppColors.lighter,
-                            ),
-                            child: Center(
-                                child: Text(
-                              "${newvcount}${newvcount == "15" ? "+" : ""}",
-                              style: const TextStyle(
-                                  color: Colors.white, fontSize: 10),
-                            ))),
-                      ),
                     ],
                   ),
-                )
-              ],
-            )),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  String _getInitials(String name) {
+    final parts = name.trim().split(' ');
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) {
+      return parts[0].substring(0, 1).toUpperCase();
+    }
+    return '${parts[0].substring(0, 1)}${parts[1].substring(0, 1)}'.toUpperCase();
+  }
+
+  String _formatTime(DateTime time) {
+    final now = DateTime.now();
+    final difference = now.difference(time);
+
+    if (difference.inDays == 0) {
+      // Today - show time
+      final hour = time.hour.toString().padLeft(2, '0');
+      final minute = time.minute.toString().padLeft(2, '0');
+      return '$hour:$minute';
+    } else if (difference.inDays == 1) {
+      return 'Yesterday';
+    } else if (difference.inDays < 7) {
+      // This week - show day name
+      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      return days[time.weekday - 1];
+    } else {
+      // Older - show date
+      return '${time.day}/${time.month}/${time.year}';
+    }
   }
 }

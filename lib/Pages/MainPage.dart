@@ -1,18 +1,19 @@
 import 'package:curved_navigation_bar/curved_navigation_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
-import 'package:easingles/Components/Liked.dart';
-import 'package:easingles/Components/Toolbar.dart';
-import 'package:easingles/Pages/Chats.dart';
-import 'package:easingles/Pages/Dating.dart';
-import 'package:easingles/Pages/GiftsPager.dart';
-import 'package:easingles/Pages/Likes.dart';
-import 'package:easingles/Pages/Moments.dart';
-import 'package:easingles/Pages/Profilepage.dart';
-import 'package:easingles/Pages/home_page.dart';
-import 'package:easingles/Provider/SocketProvider.dart';
-import 'package:easingles/assets/app.colors.dart';
-import 'package:easingles/assets/urlconfig.dart';
+import 'package:mazale/Components/Liked.dart';
+import 'package:mazale/Components/Toolbar.dart';
+import 'package:mazale/Pages/Chats.dart';
+import 'package:mazale/Pages/Dating.dart';
+import 'package:mazale/Pages/GiftsPager.dart';
+import 'package:mazale/Pages/Likes.dart';
+import 'package:mazale/Pages/Moments.dart';
+import 'package:mazale/Pages/PeopleAroundMapPage.dart';
+import 'package:mazale/Pages/Profilepage.dart';
+import 'package:mazale/Pages/home_page.dart';
+import 'package:mazale/Provider/SocketProvider.dart';
+import 'package:mazale/assets/app.colors.dart';
+import 'package:mazale/assets/urlconfig.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
@@ -31,6 +32,11 @@ class _MainPageState extends State<MainPage> {
   void initState() {
     super.initState();
     initializeOneSignal();
+    handShake();
+    // Initialize socket immediately
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<SocketProvider>(context, listen: false).initialize();
+    });
   }
   
   Future<void> initializeOneSignal() async {
@@ -45,10 +51,7 @@ class _MainPageState extends State<MainPage> {
 
   @override
   Widget build(BuildContext context) {
-    void startserver() {
-      context.read<SocketProvider>().initsocket();
-    }
-    startserver();
+  
     return Scaffold(
       body: pages[controller],
       bottomNavigationBar: CurvedNavigationBar(
@@ -92,7 +95,20 @@ class _MainPageState extends State<MainPage> {
     Dating(),
     Likes(),
     Chats(),
-    Moments(),
-    Profilepage(),
+    MomentsPage(),
+    PeopleAroundMapPage(),
   ];
+  
+  Future<void> handShake() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? token = prefs.getString("token");
+    var postUrl = Uri.parse('${AppUrls.production}/api/chat/handshake/');
+    http.post(postUrl, headers: {'Authorization': 'Bearer $token'}).then((response) {
+      if (response.statusCode == 200) {
+        debugPrint('Handshake successful');
+      } else {
+         handShake();
+      }
+    });
+  }
 }

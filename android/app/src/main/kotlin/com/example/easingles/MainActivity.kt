@@ -1,4 +1,4 @@
-package com.yodate.com
+package com.mazale.app
 
 import io.flutter.embedding.android.FlutterActivity
 

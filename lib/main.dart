@@ -1,29 +1,31 @@
+import 'package:mazale/Provider/SocketProvider.dart';
+import 'package:mazale/Provider/ProfileProvider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:flutter/material.dart';
-import 'package:easingles/Models/model.dart';
-import 'package:easingles/Pages/ChatScreen.dart';
-import 'package:easingles/Pages/Chats.dart';
-import 'package:easingles/Pages/Dating.dart';
-import 'package:easingles/Pages/ForgotPass.dart';
-import 'package:easingles/Pages/GiftsPager.dart';
-import 'package:easingles/Pages/Confirmwithdraw.dart';
-import 'package:easingles/Pages/Intro.dart';
-import 'package:easingles/Pages/Likes.dart';
-import 'package:easingles/Pages/Login_page.dart';
-import 'package:easingles/Pages/Moments.dart';
-import 'package:easingles/Pages/Notifications.dart';
-import 'package:easingles/Pages/PostMoment.dart';
-import 'package:easingles/Pages/Profile_edit.dart';
-import 'package:easingles/Pages/Purchase.dart';
-import 'package:easingles/Pages/Register.dart';
-import 'package:easingles/Pages/Withdraw.dart';
-import 'package:easingles/Pages/home_page.dart';
-import 'package:easingles/Pages/MainPage.dart';
-import 'package:easingles/Provider/LoginProvider.dart';
-import 'package:easingles/Provider/RegisterProvider.dart';
-import 'package:easingles/Provider/BackendChatProvider.dart';
-import 'package:easingles/assets/app.colors.dart';
+import 'package:mazale/Models/model.dart';
+import 'package:mazale/Pages/ChatScreen.dart';
+import 'package:mazale/Pages/Chats.dart';
+import 'package:mazale/Pages/Dating.dart';
+import 'package:mazale/Pages/ForgotPass.dart';
+import 'package:mazale/Pages/GiftsPager.dart';
+import 'package:mazale/Pages/Confirmwithdraw.dart';
+import 'package:mazale/Pages/Intro.dart';
+import 'package:mazale/Pages/Likes.dart';
+import 'package:mazale/Pages/Login_page.dart';
+import 'package:mazale/Pages/Moments.dart';
+import 'package:mazale/Pages/Notifications.dart';
+import 'package:mazale/Pages/PostMoment.dart';
+import 'package:mazale/Pages/Profile_edit.dart';
+import 'package:mazale/Pages/Purchase.dart';
+import 'package:mazale/Pages/Register.dart';
+import 'package:mazale/Pages/Withdraw.dart';
+import 'package:mazale/Pages/home_page.dart';
+import 'package:mazale/Pages/MainPage.dart';
+import 'package:mazale/Provider/LoginProvider.dart';
+import 'package:mazale/Provider/RegisterProvider.dart';
+import 'package:mazale/Provider/BackendChatProvider.dart';
+import 'package:mazale/assets/app.colors.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -33,6 +35,7 @@ Widget _defaultHome = Login_page();
 void main() async {
 
   WidgetsFlutterBinding.ensureInitialized();
+
   OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
 
   OneSignal.initialize("06016505-f0a1-4eec-bcf6-24ffd1b745f2");
@@ -71,7 +74,9 @@ class _MyAppState extends State<MyApp> {
       providers: [
         ChangeNotifierProvider(create: (context) => LoginProvider()),
         ChangeNotifierProvider(create: (context) => RegisterProvider()),
-        ChangeNotifierProvider(create: (context) => BackendChatProvider())
+        ChangeNotifierProvider(create: (context) => BackendChatProvider()),
+        ChangeNotifierProvider(create: (context) => SocketProvider()),
+        ChangeNotifierProvider(create: (context) => ProfileProvider())
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -85,7 +90,7 @@ class _MyAppState extends State<MyApp> {
         '/': (context) => _defaultHome,
           '/purchase': (context) => Purchase(),
           '/main': (context) => MainPage(),
-          '/moments': (context) => Moments(),
+          '/moments': (context) => MomentsPage(),
           "/newmoment": (context) => PostMoment(),
           '/home': (context) => Dating(),
           '/mainpage': (context) => Likes(),

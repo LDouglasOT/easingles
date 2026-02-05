@@ -1,4 +1,4 @@
-import 'package:easingles/Models/models.dart';
+import 'package:mazale/Models/models.dart';
 
 class Message {
   int id;

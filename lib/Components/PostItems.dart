@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:easingles/styles/app.text.dart';// Assuming you have a file named app_text.dart for AppText
+import 'package:mazale/styles/app.text.dart';// Assuming you have a file named app_text.dart for AppText
 
 class PostItem extends StatelessWidget {
   final dynamic user;

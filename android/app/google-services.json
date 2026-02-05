@@ -7,12 +7,94 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:1048511336383:android:198c8d60ea407ec83c5b0a",
+        "android_client_info": {
+          "package_name": "com.mazale.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1048511336383-87v9vemsvcikospfjlj4q08aoh0tdm45.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mazale.app",
+            "certificate_hash": "3a0466cc266c482b9672cdb455c0ad1a9f6c6868"
+          }
+        },
+        {
+          "client_id": "1048511336383-oc57lcet02qh49kn751r5g8vu8hn74bs.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAKpJ2u5smHmCWUKMXzqFV1tNUNH1olIqg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1048511336383-oc57lcet02qh49kn751r5g8vu8hn74bs.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1048511336383:android:2722fe4c04aa6d2c3c5b0a",
+        "android_client_info": {
+          "package_name": "com.mazale.com"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1048511336383-aeifke05rh0i9figt4mvifuqlugv37av.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mazale.com",
+            "certificate_hash": "3a0466cc266c482b9672cdb455c0ad1a9f6c6868"
+          }
+        },
+        {
+          "client_id": "1048511336383-oc57lcet02qh49kn751r5g8vu8hn74bs.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAKpJ2u5smHmCWUKMXzqFV1tNUNH1olIqg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1048511336383-oc57lcet02qh49kn751r5g8vu8hn74bs.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:1048511336383:android:ea55a368ab04f8b13c5b0a",
         "android_client_info": {
           "package_name": "com.yodate.com"
         }
       },
       "oauth_client": [
+        {
+          "client_id": "1048511336383-35sedtrnqqctt2lkb1nebi1piag7hfd6.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.yodate.com",
+            "certificate_hash": "3a0466cc266c482b9672cdb455c0ad1a9f6c6868"
+          }
+        },
         {
           "client_id": "1048511336383-oc57lcet02qh49kn751r5g8vu8hn74bs.apps.googleusercontent.com",
           "client_type": 3

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:easingles/Provider/SocketProvider.dart';
-import 'package:easingles/assets/app.colors.dart';
+import 'package:mazale/Provider/SocketProvider.dart';
+import 'package:mazale/assets/app.colors.dart';
 import 'package:provider/provider.dart';
 
 class Toolbar extends StatelessWidget implements PreferredSizeWidget {

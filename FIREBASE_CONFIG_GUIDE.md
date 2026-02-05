@@ -13,7 +13,7 @@ Based on your service account, your Firebase project ID is: **twinbrook-12f84**
 5. Click **"Add app"** → **Android** (or iOS if needed)
 6. Fill in:
    - **Android package name**: `com.yodate.com`
-   - **App nickname**: `easingles`
+   - **App nickname**: `mazale`
    - **Debug signing certificate**: Leave empty for now
 7. Click **"Register app"**
 8. **Download** the `google-services.json` file

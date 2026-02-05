@@ -2,30 +2,37 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:easingles/assets/app.colors.dart';
+import 'package:mazale/assets/app.colors.dart';
+import 'package:mazale/assets/urlconfig.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-
-// Assuming these imports are correctly defined in your project:
-// import 'package:easingles/Components/Toolbar.dart';
-// import 'package:easingles/assets/app.colors.dart';
-// import 'package:easingles/assets/urlconfig.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-// --- Placeholder/External Classes (Required for the PostMoment page to compile) ---
 
 class Toolbar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final Color background;
   final List<Widget>? actions;
   final Widget? leading;
-  const Toolbar({required this.title, required this.background, this.actions, this.leading, super.key});
+  const Toolbar({
+    required this.title,
+    required this.background,
+    this.actions,
+    this.leading,
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
     return AppBar(
-      title: Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.primary)),
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 22,
+          fontWeight: FontWeight.bold,
+          color: AppColors.primary,
+        ),
+      ),
       backgroundColor: AppColors.background,
       elevation: 0,
       leading: leading,
@@ -37,21 +44,15 @@ class Toolbar extends StatelessWidget implements PreferredSizeWidget {
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 }
 
-class AppUrls {
-  static const String production = "https://example.com";
-}
-
-// -------------------------------------------------------------------
-
 class PostMoment extends StatefulWidget {
-  PostMoment({super.key});
+  const PostMoment({super.key});
 
   @override
   State<PostMoment> createState() => _PostMomentState();
 }
 
 class _PostMomentState extends State<PostMoment> {
-  List<File?> _selectedImages = [];
+  final List<File> _selectedImages = [];
   final TextEditingController momentController = TextEditingController();
   bool isUploading = false;
   final ImagePicker _picker = ImagePicker();
@@ -62,113 +63,82 @@ class _PostMomentState extends State<PostMoment> {
     super.dispose();
   }
 
-  Future<String> uploadFile(
-      String uploadUrl, List<File?> userImages, String fileType) async {
-    // This method is primarily for file upload logic, keeping it as-is for UI focus.
-    // Ensure your actual implementation handles the HTTP request correctly.
-    await Future.delayed(Duration(seconds: 2)); // Simulate network delay
-    return "https://default-image-url.jpg"; // Placeholder
-  }
-
-  void postMoment() async {
-    if (_selectedImages.isEmpty || momentController.text.trim().isEmpty) {
+void postMoment() async {
+    if (_selectedImages.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Please select an image and write a caption!',
-            style: TextStyle(color: AppColors.fontColor2),
-          ),
-          backgroundColor: AppColors.primary, // Use primary for alerts
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          margin: EdgeInsets.all(16),
-        ),
+        const SnackBar(content: Text('Please select at least one image')),
       );
       return;
     }
 
-    setState(() {
-      isUploading = true;
-    });
-
     try {
+      setState(() {
+        isUploading = true;
+      });
+
       SharedPreferences prefs = await SharedPreferences.getInstance();
       String? token = prefs.getString('token');
-      String? firstName = prefs.getString("FirstName");
-      String? LastName = prefs.getString("LastName");
-      String? id = prefs.getString("id");
 
+      // 1. Initialize Multipart Request
+      // Borrowing from your backend's parser_classes([MultiPartParser, FormParser])
       var request = http.MultipartRequest(
-          'POST', Uri.parse("${AppUrls.production}/api/moments"));
+        'POST',
+        Uri.parse("${AppUrls.production}/api/moments/"),
+      );
 
-      request.headers['Authorization'] = 'Bearer $token';
-      request.fields['TagLine'] = momentController.text;
-      request.fields['firstName'] = firstName ?? "";
-      request.fields['LastName'] = LastName ?? "";
-      request.fields['owenId'] = id ?? "0";
+      // 2. Add Authorization Header
+      request.headers.addAll({
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/json',
+      });
 
+      // 3. Add Text Fields
+      // Based on your backend 'data = request.data.copy()', it expects 'tagline'
+      request.fields['tagline'] = momentController.text.trim();
+
+      // 4. Add Image Files
+      // Borrowing the logic from your photo_key loop (photo_1, photo_2...)
+      // NOTE: If your MomentSerializer expects a list, use the key 'images' for all.
+      // If it works like your upload_photos function, use 'image_1', 'image_2' etc.
       for (int i = 0; i < _selectedImages.length; i++) {
-        if (_selectedImages[i] != null) {
-          request.files.add(
-            await http.MultipartFile.fromPath(
-              'userImages',
-              _selectedImages[i]!.path,
-              filename: '$firstName$LastName$i.jpg',
-            ),
-          );
-        }
+        File imageFile = _selectedImages[i];
+        
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'images', // Change to 'photo_${i + 1}' if it matches upload_photos logic
+            imageFile.path,
+            filename: imageFile.path.split('/').last,
+          ),
+        );
       }
 
-      var response = await request.send();
+      // 5. Send Request
+      var streamedResponse = await request.send();
+      var response = await http.Response.fromStream(streamedResponse);
 
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Moment posted successfully!',
-              style: TextStyle(color: AppColors.fontColor2),
-            ),
-            backgroundColor: AppColors.primary,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            margin: EdgeInsets.all(16),
-          ),
-        );
-        Navigator.of(context).pop();
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        if (mounted) {
+          setState(() {
+            isUploading = false;
+          });
+          // Show success and go back
+          Navigator.of(context).pop();
+        }
       } else {
-        final responseBody = await response.stream.bytesToString();
-        print('Failed to submit. Status code: ${response.statusCode}. Response: $responseBody');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Failed to post moment (Status: ${response.statusCode})',
-              style: TextStyle(color: AppColors.fontColor),
-            ),
-            backgroundColor: Colors.redAccent,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            margin: EdgeInsets.all(16),
-          ),
-        );
+        // Handle Validation errors from Serializer (status 400)
+        final errorData = jsonDecode(response.body);
+        throw Exception(errorData.toString());
       }
     } catch (err) {
-      print('Post error: $err');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'An unexpected error occurred. Please try again.',
-            style: TextStyle(color: AppColors.fontColor),
-          ),
-          backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          margin: EdgeInsets.all(16),
-        ),
-      );
-    } finally {
-      setState(() {
-        isUploading = false;
-      });
+      debugPrint('Error: $err');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload failed: $err')),
+        );
+        setState(() {
+          isUploading = false;
+        });
+      }
     }
   }
 
@@ -181,15 +151,12 @@ class _PostMomentState extends State<PostMoment> {
     if (images != null && images.isNotEmpty) {
       setState(() {
         _selectedImages.clear();
-        _selectedImages.addAll(
-          images.map((image) => File(image.path)),
-        );
+        _selectedImages.addAll(images.map((image) => File(image.path)));
       });
     }
   }
 
-  // --- Beautiful UI Widgets ---
-
+  // UI Helper methods remain largely the same, but simplified for the new list type
   Widget _buildImagePickerArea() {
     return GestureDetector(
       onTap: _pickImage,
@@ -197,42 +164,24 @@ class _PostMomentState extends State<PostMoment> {
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
         width: double.infinity,
-        height: _selectedImages.isEmpty ? 200 : 300, // Make empty state larger
+        height: _selectedImages.isEmpty ? 200 : 300,
         decoration: BoxDecoration(
-          color: AppColors.lighter.withOpacity(_selectedImages.isEmpty ? 1 : 0.8), // Dynamic opacity
-          borderRadius: BorderRadius.circular(20), // More rounded corners
-          boxShadow: _selectedImages.isEmpty
-              ? [
-                  BoxShadow(
-                    color: AppColors.primary.withOpacity(0.2),
-                    blurRadius: 10,
-                    spreadRadius: 2,
-                  ),
-                ]
-              : null,
+          color: AppColors.lighter.withOpacity(_selectedImages.isEmpty ? 1 : 0.8),
+          borderRadius: BorderRadius.circular(20),
           border: _selectedImages.isEmpty
-              ? Border.all(color: AppColors.primary, width: 2.5) // More prominent border
+              ? Border.all(color: AppColors.primary, width: 2.5)
               : null,
         ),
         child: _selectedImages.isEmpty
-            ? Center(
+            ? const Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      Icons.add_a_photo_outlined, // More relevant icon
-                      color: AppColors.primary, // Primary color for icon
-                      size: 60,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Tap to add your moment\'s photo!',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          color: AppColors.fontColor,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600),
-                    ),
+                    Icon(Icons.add_a_photo_outlined, color: AppColors.primary, size: 60),
+                    SizedBox(height: 12),
+                    Text('Tap to add your moment\'s photo!',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
                   ],
                 ),
               )
@@ -241,10 +190,7 @@ class _PostMomentState extends State<PostMoment> {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(20),
-                    child: Image.file(
-                      _selectedImages[0]!,
-                      fit: BoxFit.cover,
-                    ),
+                    child: Image.file(_selectedImages[0], fit: BoxFit.cover),
                   ),
                   Positioned(
                     top: 15,
@@ -255,34 +201,18 @@ class _PostMomentState extends State<PostMoment> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                             decoration: BoxDecoration(
-                              color: AppColors.background.withOpacity(0.7), // Darker overlay for readability
+                              color: AppColors.background.withOpacity(0.7),
                               borderRadius: BorderRadius.circular(15),
                             ),
-                            child: Text(
-                              '+${_selectedImages.length - 1} more',
-                              style: TextStyle(
-                                  color: AppColors.fontColor,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14),
-                            ),
+                            child: Text('+${_selectedImages.length - 1} more',
+                                style: const TextStyle(fontWeight: FontWeight.bold)),
                           ),
                         const SizedBox(width: 10),
-                        Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(15),
-                            color: AppColors.lighter.withOpacity(0.9),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.3),
-                                blurRadius: 5,
-                                spreadRadius: 1,
-                              ),
-                            ],
-                          ),
+                        CircleAvatar(
+                          backgroundColor: AppColors.lighter.withOpacity(0.9),
                           child: IconButton(
-                            icon: const Icon(Icons.refresh, color: AppColors.primary, size: 28), // Refresh icon
+                            icon: const Icon(Icons.refresh, color: AppColors.primary),
                             onPressed: _pickImage,
-                            tooltip: 'Change image(s)',
                           ),
                         ),
                       ],
@@ -298,73 +228,34 @@ class _PostMomentState extends State<PostMoment> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: AppColors.lighter.withOpacity(0.8), // Lighter surface for input
+        color: AppColors.lighter.withOpacity(0.8),
         borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
       child: TextField(
         controller: momentController,
-        maxLines: 6, // Allow more lines for detailed descriptions
+        maxLines: 6,
         minLines: 3,
-        style: TextStyle(color: AppColors.fontColor, fontSize: 16),
-        cursorColor: AppColors.primary, // Primary color for cursor
-        decoration: InputDecoration(
-          hintText: 'Share your story, feelings, or what\'s on your mind...',
-          hintStyle: TextStyle(color: AppColors.disableFont.withOpacity(0.7), fontSize: 16),
-          border: InputBorder.none, // Remove default border
-          contentPadding: const EdgeInsets.all(10),
+        decoration: const InputDecoration(
+          hintText: 'Share your story...',
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.all(10),
         ),
       ),
     );
   }
 
   Widget _buildPostButton() {
-    final bool canPost = !isUploading && (_selectedImages.isNotEmpty && momentController.text.trim().isEmpty);
-
     return ElevatedButton(
-      onPressed:postMoment,
+      onPressed: isUploading ? null : postMoment,
       style: ElevatedButton.styleFrom(
-        minimumSize: const Size(double.infinity, 60), // Larger button
-        backgroundColor:  AppColors.primary,
-        foregroundColor: Colors.black,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(15), // Consistent rounded corners
-        ),
-        elevation: 8, // More pronounced shadow
-        shadowColor: AppColors.primary.withOpacity(0.4), // Shadow color from primary
+        minimumSize: const Size(double.infinity, 60),
+        backgroundColor: AppColors.primary,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       ),
-      child: AnimatedSwitcher( // Add animation for loading state
-        duration: const Duration(milliseconds: 300),
-        transitionBuilder: (Widget child, Animation<double> animation) {
-          return FadeTransition(opacity: animation, child: child);
-        },
-        child: isUploading
-            ? SizedBox(
-                key: const ValueKey('loading'),
-                height: 28,
-                width: 28,
-                child: CircularProgressIndicator(
-                  color: AppColors.fontColor2,
-                  strokeWidth: 3,
-                ),
-              )
-            : Text(
-                "PUBLISH MOMENT",
-                key: const ValueKey('text'),
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: canPost ? AppColors.fontColor2 : AppColors.disableFont,
-                  letterSpacing: 1.2, // Slightly increased letter spacing
-                ),
-              ),
-      ),
+      child: isUploading
+          ? const CircularProgressIndicator(color: Colors.black)
+          : const Text("Post Moment", 
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black)),
     );
   }
 
@@ -372,45 +263,23 @@ class _PostMomentState extends State<PostMoment> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: Toolbar(
-        title: "Create New Moment", // More inviting title
+        title: "Create New Moment",
         background: AppColors.background,
         leading: IconButton(
-          onPressed: () {
-            Navigator.of(context).pop();
-          },
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.fontColor), // iOS-style back arrow
+          onPressed: () => Navigator.of(context).pop(),
+          icon: const Icon(Icons.arrow_back_ios, color: AppColors.fontColor),
         ),
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AppColors.background,
-              AppColors.gradientEnd, // A slightly darker purple for the gradient end
-            ],
-          ),
-        ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // 1. Image Picker Area
-              _buildImagePickerArea(),
-              
-              const SizedBox(height: 25), // Increased spacing
-
-              // 2. Caption Text Field
-              _buildCaptionInputField(),
-              
-              const SizedBox(height: 35), // Increased spacing
-
-              // 3. Post Button
-              _buildPostButton(),
-            ],
-          ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            _buildImagePickerArea(),
+            const SizedBox(height: 25),
+            _buildCaptionInputField(),
+            const SizedBox(height: 35),
+            _buildPostButton(),
+          ],
         ),
       ),
     );
